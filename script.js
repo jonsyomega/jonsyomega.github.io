@@ -1,0 +1,15 @@
+﻿// Год в футере
+document.getElementById('year').textContent = new Date().getFullYear();
+
+// Плавный скролл по меню
+document.querySelectorAll('a[href^="#"]').forEach(link => {
+  link.addEventListener('click', e => {
+    const id = link.getAttribute('href');
+    if (id === '#') return;
+    const target = document.querySelector(id);
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
