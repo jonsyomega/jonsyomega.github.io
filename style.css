@@ -5,49 +5,63 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  background: #000;               /* чёрный экран вокруг окна */
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: #fff;
+  padding: 20px;
+}
 
-  /* ФОН */
+/* Окно 1000×600 с твоим фоном */
+.frame {
+  width: 1000px;
+  max-width: 100%;                /* на телефоне сжимается */
+  aspect-ratio: 1000 / 600;       /* сохраняет пропорции 1000×600 */
   background-image: url("bg.jpg");
   background-size: cover;
   background-position: center;
-  background-attachment: fixed;
-  background-color: #0f1115;
+  border-radius: 16px;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px;
+
+  position: relative;
 }
 
-/* Затемнение поверх фона для читаемости текста */
-body::before {
+/* Затемнение поверх картинки, чтобы текст читался */
+.frame::before {
   content: "";
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
-  z-index: -1;
+  z-index: 0;
 }
 
-.card {
-  max-width: 720px;
-  width: 100%;
-  text-align: center;
-}
+.frame > * { position: relative; z-index: 1; }
 
+/* ФИО */
 h1 {
-  font-size: clamp(32px, 6vw, 56px);
+  font-size: clamp(22px, 3.4vw, 42px);
   font-weight: 700;
-  margin-bottom: 24px;
   line-height: 1.2;
-  text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+  margin-bottom: 20px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.8);
 }
 
+/* Описание */
 .about {
-  font-size: clamp(15px, 2vw, 18px);
-  line-height: 1.7;
+  font-size: clamp(13px, 1.6vw, 18px);
+  line-height: 1.6;
   color: #e0e0e4;
-  margin-bottom: 36px;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.6);
+  margin-bottom: 32px;
+  text-shadow: 0 1px 8px rgba(0,0,0,0.8);
 }
 
+/* Кнопки */
 .contacts {
   display: flex;
   flex-wrap: wrap;
@@ -56,14 +70,13 @@ h1 {
 }
 
 .contacts a {
-  display: inline-block;
   padding: 12px 22px;
   background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 999px;
   color: #fff;
   text-decoration: none;
-  font-size: 15px;
+  font-size: clamp(12px, 1.3vw, 15px);
   font-weight: 500;
   backdrop-filter: blur(6px);
   transition: background .2s, border-color .2s, transform .15s;
