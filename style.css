@@ -5,17 +5,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000;               /* чёрный экран вокруг окна */
+  background: #000;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: #fff;
   padding: 20px;
 }
 
-/* Окно 1000×603 с твоим фоном */
+/* ===== ОКНО ВИЗИТКИ ===== */
 .frame {
-  width: 1000px;
-  max-width: 100%;                /* на телефоне сжимается */
-  aspect-ratio: 1000 / 603;       /* сохраняет пропорции 1000×603 */
+  width: 100%;
+  max-width: 960px;              /* не шире 960px на десктопе */
+  aspect-ratio: 16 / 10;         /* пропорция визитки */
   background-image: url("bg.jpg");
   background-size: cover;
   background-position: center;
@@ -32,7 +32,7 @@ body {
   position: relative;
 }
 
-/* Затемнение поверх картинки, чтобы текст читался */
+/* Затемнение для читаемости текста */
 .frame::before {
   content: "";
   position: absolute;
@@ -45,7 +45,7 @@ body {
 
 /* ФИО */
 h1 {
-  font-size: clamp(22px, 3.4vw, 42px);
+  font-size: clamp(26px, 4vw, 40px);
   font-weight: 700;
   line-height: 1.2;
   margin-bottom: 20px;
@@ -54,11 +54,12 @@ h1 {
 
 /* Описание */
 .about {
-  font-size: clamp(13px, 1.6vw, 18px);
+  font-size: clamp(16px, 1.8vw, 18px);
   line-height: 1.6;
   color: #e0e0e4;
   margin-bottom: 32px;
   text-shadow: 0 1px 8px rgba(0,0,0,0.8);
+  max-width: 640px;
 }
 
 /* Кнопки */
@@ -70,13 +71,13 @@ h1 {
 }
 
 .contacts a {
-  padding: 12px 22px;
+  padding: 14px 24px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 999px;
   color: #fff;
   text-decoration: none;
-  font-size: clamp(12px, 1.3vw, 15px);
+  font-size: clamp(15px, 1.6vw, 16px);
   font-weight: 500;
   backdrop-filter: blur(6px);
   transition: background .2s, border-color .2s, transform .15s;
@@ -86,4 +87,42 @@ h1 {
   background: rgba(255, 122, 0, 0.85);
   border-color: #ff7a00;
   transform: translateY(-2px);
+}
+
+/* ===== ТЕЛЕФОН ===== */
+@media (max-width: 768px) {
+
+  body { padding: 12px; }
+
+  .frame {
+    aspect-ratio: auto;                     /* отменяем пропорцию */
+    min-height: calc(100vh - 24px);         /* почти весь экран */
+    max-width: 100%;
+    border-radius: 12px;
+    padding: 32px 20px;
+  }
+
+  h1 {
+    font-size: 28px;
+    margin-bottom: 16px;
+  }
+
+  .about {
+    font-size: 16px;
+    line-height: 1.65;
+    margin-bottom: 28px;
+  }
+
+  .contacts {
+    flex-direction: column;                 /* кнопки в столбик */
+    width: 100%;
+    gap: 10px;
+  }
+
+  .contacts a {
+    width: 100%;
+    padding: 16px 18px;
+    font-size: 16px;
+    text-align: center;
+  }
 }
