@@ -12,15 +12,10 @@ body {
 }
 
 /* ===== ОКНО ВИЗИТКИ ===== */
-.frame {
+.card {
   width: 100%;
   max-width: 960px;
   aspect-ratio: 16 / 10;
-  background-image: url("bg.jpg");
-  background-size: cover;
-  background-position: center;
-  border-radius: 16px;
-  overflow: hidden;
 
   display: flex;
   flex-direction: column;
@@ -29,19 +24,23 @@ body {
   text-align: center;
   padding: 40px;
 
-  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: #0a0a0c;
 }
 
-/* Затемнение для читаемости (для белого фона можно ослабить) */
-.frame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 0;
-}
+/* ===== Логотип ===== */
+.logo {
+  width: clamp(80px, 10vw, 130px);
+  height: auto;
+  display: block;
+  margin: 0 auto 20px;
+  object-fit: contain;
 
-.frame > * { position: relative; z-index: 1; }
+  background: rgba(255, 255, 255, 0.08);
+  padding: 8px;
+  border-radius: 12px;
+}
 
 /* ===== 1. Организация ===== */
 .company {
@@ -51,7 +50,6 @@ body {
   text-transform: uppercase;
   color: #ff7a00;
   margin-bottom: 8px;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.8);
 }
 
 /* ===== 2. Подразделение ===== */
@@ -60,9 +58,8 @@ body {
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #b8bcc2;
+  color: #8a8f98;
   margin-bottom: 28px;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.8);
 }
 
 /* ===== 3. ФИО ===== */
@@ -73,7 +70,6 @@ h1 {
   margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  text-shadow: 0 2px 12px rgba(0,0,0,0.8);
 }
 
 /* ===== 4. Должность ===== */
@@ -84,7 +80,6 @@ h1 {
   text-transform: uppercase;
   color: #e0e0e4;
   margin-bottom: 24px;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.8);
 }
 
 /* ===== 5. Направление ===== */
@@ -94,10 +89,9 @@ h1 {
   line-height: 1.5;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #b8bcc2;
+  color: #8a8f98;
   margin-bottom: 32px;
   max-width: 640px;
-  text-shadow: 0 1px 8px rgba(0,0,0,0.8);
 }
 
 /* ===== 6. Кнопки ===== */
@@ -110,14 +104,13 @@ h1 {
 
 .contacts a {
   padding: 14px 24px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 999px;
   color: #fff;
   text-decoration: none;
   font-size: clamp(14px, 1.5vw, 16px);
   font-weight: 500;
-  backdrop-filter: blur(6px);
   transition: background .2s, border-color .2s, transform .15s;
 }
 
@@ -131,13 +124,15 @@ h1 {
 @media (max-width: 768px) {
   body { padding: 12px; }
 
-  .frame {
+  .card {
     aspect-ratio: auto;
     min-height: calc(100vh - 24px);
     max-width: 100%;
     border-radius: 12px;
     padding: 32px 20px;
   }
+
+  .logo { width: 80px; margin-bottom: 16px; }
 
   .company { font-size: 12px; margin-bottom: 6px; }
   .department { font-size: 10px; margin-bottom: 24px; }
