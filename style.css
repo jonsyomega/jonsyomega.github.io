@@ -125,6 +125,12 @@ h1 {
   margin-right: 6px;
 }
 
+.contacts a .icon-tg {
+  color: #229ED9;        /* фирменный синий Telegram */
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
 .contacts a:hover {
   background: rgba(255, 122, 0, 0.85);
   border-color: #ff7a00;
