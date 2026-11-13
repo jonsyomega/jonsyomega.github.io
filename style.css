@@ -118,7 +118,12 @@ h1 {
   color: #ffd400;
   margin-right: 4px;
 }
-  
+
+.contacts a .icon-phone {
+  color: #22c55e;
+  margin-right: 4px;
+}
+
 .contacts a:hover {
   background: rgba(255, 122, 0, 0.85);
   border-color: #ff7a00;
