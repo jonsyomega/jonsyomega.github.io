@@ -44,7 +44,7 @@ body {
 
 /* ===== 1. Организация ===== */
 .company {
-  font-size: clamp(16px, 1.8vw, 20px);
+  font-size: clamp(30px, 3.2vw, 44px);
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
