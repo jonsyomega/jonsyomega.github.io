@@ -44,8 +44,8 @@ body {
 
 /* ===== 1. Организация ===== */
 .company {
-  font-size: clamp(30px, 3.2vw, 44px);
-  font-weight: 600;
+  font-size: clamp(15px, 1.6vw, 20px);
+  font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: #ff7a00;
@@ -134,7 +134,7 @@ h1 {
 
   .logo { width: 80px; margin-bottom: 16px; }
 
-  .company { font-size: 12px; margin-bottom: 6px; }
+  .company { font-size: 15px; margin-bottom: 6px; }
   .department { font-size: 10px; margin-bottom: 24px; }
   h1 { font-size: 26px; }
   .position { font-size: 14px; margin-bottom: 20px; }
