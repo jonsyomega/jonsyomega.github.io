@@ -116,11 +116,12 @@ h1 {
 
 .contacts a .icon {
   color: #ffd400;
-  margin-right: 4px;
+  vertical-align: middle;
+  margin-right: 6px;
 }
 
-.contacts a .icon {
-  color: #ffd400;
+.contacts a .icon-phone {
+  color: #22c55e;
   vertical-align: middle;
   margin-right: 6px;
 }
