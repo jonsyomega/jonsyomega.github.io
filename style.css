@@ -121,7 +121,7 @@ h1 {
 }
 
 .contacts a .icon-phone {
-  color: #22c55e;
+  color: #22c55e;        /* зеленый */
   vertical-align: middle;
   margin-right: 6px;
 }
