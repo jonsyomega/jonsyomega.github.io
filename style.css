@@ -121,7 +121,8 @@ h1 {
 
 .contacts a .icon-phone {
   color: #22c55e;
-  margin-right: 4px;
+  vertical-align: middle;
+  margin-right: 6px;
 }
 
 .contacts a:hover {
