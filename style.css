@@ -114,6 +114,11 @@ h1 {
   transition: background .2s, border-color .2s, transform .15s;
 }
 
+.contacts a .icon {
+  color: #ffd400;
+  margin-right: 4px;
+}
+  
 .contacts a:hover {
   background: rgba(255, 122, 0, 0.85);
   border-color: #ff7a00;
