@@ -193,6 +193,7 @@
     getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
     onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
 
   // Твой конфиг
   const firebaseConfig = {
@@ -207,6 +208,7 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const auth = getAuth(app);
+  const messaging = getMessaging(app);
 
   // Элементы
   const loginBox = document.getElementById('loginBox');
@@ -281,6 +283,23 @@
       }
       userEmail.textContent = 'Вы вошли как ' + currentUserName;
 
+      // Запрос разрешения на уведомления и получение токена
+      if (Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+      if (Notification.permission === 'granted') {
+        try {
+          const currentToken = await getToken(messaging, {
+            vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8"
+          });
+          if (currentToken) {
+            console.log('Токен для уведомлений:', currentToken);
+          }
+        } catch (err) {
+          console.log('Ошибка получения токена:', err);
+        }
+      }
+
       // Подписка на сообщения
       const q = query(collection(db, 'messages'), orderBy('createdAt'));
       onSnapshot(q, snapshot => {
@@ -290,7 +309,6 @@
           const div = document.createElement('div');
           div.className = 'message ' + (data.uid === user.uid ? 'mine' : 'other');
 
-          // Форматируем время
           let timeStr = '';
           if (data.createdAt) {
             const date = data.createdAt.toDate();
@@ -313,6 +331,14 @@
       currentUserName = '';
     }
   });
+
+  // Уведомление, когда приложение открыто (на переднем плане)
+  onMessage(messaging, (payload) => {
+    console.log('Сообщение на переднем плане:', payload);
+    new Notification(payload.notification?.title || 'Новое сообщение', {
+      body: payload.notification?.body || ''
+    });
+  });
 </script>
 
 <script>
@@ -324,6 +350,7 @@
 </script>
 
 </body>
+</html>
 </html>
 
 
