@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -283,15 +283,21 @@
       }
       userEmail.textContent = 'Вы вошли как ' + currentUserName;
 
-      // Запрос разрешения на уведомления и получение токена
+      // Запрос разрешения на уведомления
       if (Notification.permission === 'default') {
         await Notification.requestPermission();
       }
       if (Notification.permission === 'granted') {
         try {
+          // Регистрируем service worker для FCM
+          const swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+          console.log('FCM Service Worker зарегистрирован:', swRegistration);
+
           const currentToken = await getToken(messaging, {
-            vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8"
+            vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8",
+            serviceWorkerRegistration: swRegistration
           });
+
           if (currentToken) {
             console.log('Токен для уведомлений:', currentToken);
           }
@@ -332,7 +338,7 @@
     }
   });
 
-  // Уведомление, когда приложение открыто (на переднем плане)
+  // Уведомление, когда приложение открыто
   onMessage(messaging, (payload) => {
     console.log('Сообщение на переднем плане:', payload);
     new Notification(payload.notification?.title || 'Новое сообщение', {
@@ -342,6 +348,7 @@
 </script>
 
 <script>
+  // Регистрируем обычный PWA service worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
       .then(() => console.log('Service Worker зарегистрирован'))
@@ -351,6 +358,3 @@
 
 </body>
 </html>
-</html>
-
-
