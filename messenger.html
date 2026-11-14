@@ -121,6 +121,13 @@
     display: block;
     margin-bottom: 4px;
   }
+  .message .time {
+    font-size: 10px;
+    opacity: .6;
+    display: block;
+    margin-top: 4px;
+    text-align: right;
+  }
 
   .chat-input {
     display: flex;
@@ -156,6 +163,7 @@
 <!-- Форма входа -->
 <div class="login-box" id="loginBox">
   <h1>Мессенджер</h1>
+  <input id="name" type="text" placeholder="Ваше имя (при регистрации)">
   <input id="email" type="email" placeholder="Email">
   <input id="password" type="password" placeholder="Пароль">
   <button id="loginBtn">Войти / Зарегистрироваться</button>
@@ -178,19 +186,20 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import {
-    getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp
+    getFirestore, collection, addDoc, query, orderBy, onSnapshot,
+    serverTimestamp, doc, setDoc, getDoc
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import {
     getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
     onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-  // ?? ВСТАВЬ СВОЙ КОНФИГ ИЗ FIREBASE
+  // Твой конфиг
   const firebaseConfig = {
     apiKey: "AIzaSyAk2qhmu4GJQozcU74_FNQWhzk4T7P-gPU",
     authDomain: "my-messenger-95eda.firebaseapp.com",
     projectId: "my-messenger-95eda",
-    storageBucket: "y-messenger-95eda.firebasestorage.app",
+    storageBucket: "my-messenger-95eda.firebasestorage.app",
     messagingSenderId: "327505492353",
     appId: "1:327505492353:web:3306144f22b8ac16eb9080"
   };
@@ -203,6 +212,7 @@
   const loginBox = document.getElementById('loginBox');
   const chat = document.getElementById('chat');
   const status = document.getElementById('status');
+  const nameInput = document.getElementById('name');
   const emailInput = document.getElementById('email');
   const passwordInput = document.getElementById('password');
   const loginBtn = document.getElementById('loginBtn');
@@ -212,17 +222,24 @@
   const messageInput = document.getElementById('messageInput');
   const sendBtn = document.getElementById('sendBtn');
 
+  let currentUserName = '';
+
   // Вход / регистрация
   loginBtn.addEventListener('click', async () => {
+    const name = nameInput.value.trim();
     const email = emailInput.value.trim();
     const password = passwordInput.value;
     if (!email || !password) { status.textContent = 'Введите email и пароль'; return; }
+
     status.textContent = 'Подождите...';
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (e) {
       try {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        if (name) {
+          await setDoc(doc(db, 'users', cred.user.uid), { name, email });
+        }
       } catch (err) {
         status.textContent = 'Ошибка: ' + err.message;
       }
@@ -235,11 +252,11 @@
   // Отправка
   async function sendMessage() {
     const text = messageInput.value.trim();
-    if (!text) return;
+    if (!text || !auth.currentUser) return;
     messageInput.value = '';
     await addDoc(collection(db, 'messages'), {
       text,
-      author: auth.currentUser.email,
+      author: currentUserName || auth.currentUser.email,
       uid: auth.currentUser.uid,
       createdAt: serverTimestamp()
     });
@@ -250,21 +267,41 @@
   });
 
   // Следим за авторизацией
-  onAuthStateChanged(auth, user => {
+  onAuthStateChanged(auth, async user => {
     if (user) {
       loginBox.style.display = 'none';
       chat.style.display = 'flex';
-      userEmail.textContent = user.email;
+
+      // Подтягиваем имя из профиля
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists() && userDoc.data().name) {
+        currentUserName = userDoc.data().name;
+      } else {
+        currentUserName = user.email;
+      }
+      userEmail.textContent = 'Вы вошли как ' + currentUserName;
 
       // Подписка на сообщения
       const q = query(collection(db, 'messages'), orderBy('createdAt'));
       onSnapshot(q, snapshot => {
         messagesEl.innerHTML = '';
-        snapshot.forEach(doc => {
-          const data = doc.data();
+        snapshot.forEach(d => {
+          const data = d.data();
           const div = document.createElement('div');
           div.className = 'message ' + (data.uid === user.uid ? 'mine' : 'other');
-          div.innerHTML = `<span class="author">${data.author}</span>${data.text}`;
+
+          // Форматируем время
+          let timeStr = '';
+          if (data.createdAt) {
+            const date = data.createdAt.toDate();
+            timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+          }
+
+          div.innerHTML = `
+            <span class="author">${data.author}</span>
+            ${data.text}
+            <span class="time">${timeStr}</span>
+          `;
           messagesEl.appendChild(div);
         });
         messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -273,16 +310,20 @@
       loginBox.style.display = 'block';
       chat.style.display = 'none';
       userEmail.textContent = '';
+      currentUserName = '';
     }
   });
 </script>
 
-</body>
- <script>
+<script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
       .then(() => console.log('Service Worker зарегистрирован'))
       .catch(err => console.log('Ошибка Service Worker:', err));
   }
 </script>
+
+</body>
 </html>
+
+
