@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Мессенджер</title>
+<title>Мессенджер (Supabase)</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
@@ -49,8 +49,14 @@
     font-weight: 600;
     font-size: 15px;
     cursor: pointer;
+    margin-bottom: 8px;
   }
   .login-box button:hover { opacity: .85; }
+  .login-box button.secondary {
+    background: transparent;
+    border: 1px solid #262b36;
+    color: #fff;
+  }
   .status {
     margin-top: 16px;
     font-size: 13px;
@@ -165,8 +171,9 @@
   <h1>Мессенджер</h1>
   <input id="name" type="text" placeholder="Ваше имя (при регистрации)">
   <input id="email" type="email" placeholder="Email">
-  <input id="password" type="password" placeholder="Пароль">
-  <button id="loginBtn">Войти / Зарегистрироваться</button>
+  <input id="password" type="password" placeholder="Пароль (мин. 6 символов)">
+  <button id="loginBtn">Войти</button>
+  <button id="signupBtn" class="secondary">Зарегистрироваться</button>
   <p class="status" id="status"></p>
 </div>
 
@@ -184,31 +191,14 @@
 </div>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {
-    getFirestore, collection, addDoc, query, orderBy, onSnapshot,
-    serverTimestamp, doc, setDoc, getDoc
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import {
-    getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-    onAuthStateChanged, signOut
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
+  // Подключаем Supabase SDK
+  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-  // Твой конфиг
-  const firebaseConfig = {
-    apiKey: "AIzaSyAk2qhmu4GJQozcU74_FNQWhzk4T7P-gPU",
-    authDomain: "my-messenger-95eda.firebaseapp.com",
-    projectId: "my-messenger-95eda",
-    storageBucket: "my-messenger-95eda.firebasestorage.app",
-    messagingSenderId: "327505492353",
-    appId: "1:327505492353:web:3306144f22b8ac16eb9080"
-  };
+  // Твои ключи
+  const SUPABASE_URL = "https://nvjrhrebhlcnnxpjzylx.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52anJocmViaGxjbm54cGp6eWx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ3OTMyNTYsImV4cCI6MjExMDM2OTI1Nn0.BzdRl7PnKIa4HAw9jzPkptiAd9uN2xA_axIwCKdzLqE";
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const auth = getAuth(app);
-  const messaging = getMessaging(app);
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // Элементы
   const loginBox = document.getElementById('loginBox');
@@ -218,137 +208,157 @@
   const emailInput = document.getElementById('email');
   const passwordInput = document.getElementById('password');
   const loginBtn = document.getElementById('loginBtn');
+  const signupBtn = document.getElementById('signupBtn');
   const logoutBtn = document.getElementById('logoutBtn');
   const userEmail = document.getElementById('userEmail');
   const messagesEl = document.getElementById('messages');
   const messageInput = document.getElementById('messageInput');
   const sendBtn = document.getElementById('sendBtn');
 
+  let currentUser = null;
   let currentUserName = '';
+  let channel = null;
 
-  // Вход / регистрация
+  // --- ВХОД ---
   loginBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    if (!email || !password) { status.textContent = 'Введите email и пароль'; return; }
+   
+    status.textContent = 'Вход...';
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      status.textContent = 'Ошибка: ' + error.message;
+    } else {
+      status.textContent = '';
+    }
+  });
+
+  // --- РЕГИСТРАЦИЯ ---
+  signupBtn.addEventListener('click', async () => {
     const name = nameInput.value.trim();
     const email = emailInput.value.trim();
     const password = passwordInput.value;
     if (!email || !password) { status.textContent = 'Введите email и пароль'; return; }
+    if (!name) { status.textContent = 'Введите имя'; return; }
 
-    status.textContent = 'Подождите...';
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (e) {
-      try {
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
-        if (name) {
-          await setDoc(doc(db, 'users', cred.user.uid), { name, email });
-        }
-      } catch (err) {
-        status.textContent = 'Ошибка: ' + err.message;
+    status.textContent = 'Регистрация...';
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name: name }
       }
+    });
+   
+    if (error) {
+      status.textContent = 'Ошибка: ' + error.message;
+    } else {
+      status.textContent = 'Успешно! Теперь можно войти.';
+      nameInput.value = '';
     }
   });
 
-  // Выход
-  logoutBtn.addEventListener('click', () => signOut(auth));
+  // --- ВЫХОД ---
+  logoutBtn.addEventListener('click', async () => {
+    if (channel) supabase.removeChannel(channel);
+    await supabase.auth.signOut();
+  });
 
-  // Отправка
+  // --- ОТПРАВКА ---
   async function sendMessage() {
     const text = messageInput.value.trim();
-    if (!text || !auth.currentUser) return;
+    if (!text || !currentUser) return;
     messageInput.value = '';
-    await addDoc(collection(db, 'messages'), {
-      text,
-      author: currentUserName || auth.currentUser.email,
-      uid: auth.currentUser.uid,
-      createdAt: serverTimestamp()
+   
+    const { error } = await supabase.from('messages').insert({
+      text: text,
+      author: currentUserName,
+      uid: currentUser.id
     });
+
+    if (error) {
+      console.error('Ошибка отправки:', error);
+      alert('Не удалось отправить сообщение: ' + error.message);
+    }
   }
   sendBtn.addEventListener('click', sendMessage);
   messageInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') sendMessage();
   });
 
-  // Следим за авторизацией
-  onAuthStateChanged(auth, async user => {
-    if (user) {
+  // --- СЛЕЖИМ ЗА АВТОРИЗАЦИЕЙ ---
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (session) {
+      currentUser = session.user;
+      currentUserName = currentUser.user_metadata.name || currentUser.email;
+     
       loginBox.style.display = 'none';
       chat.style.display = 'flex';
-
-      // Подтягиваем имя из профиля
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (userDoc.exists() && userDoc.data().name) {
-        currentUserName = userDoc.data().name;
-      } else {
-        currentUserName = user.email;
-      }
       userEmail.textContent = 'Вы вошли как ' + currentUserName;
 
-      // Запрос разрешения на уведомления
-      if (Notification.permission === 'default') {
-        await Notification.requestPermission();
-      }
-      if (Notification.permission === 'granted') {
-        try {
-          // Регистрируем service worker для FCM (новое имя файла)
-          const swRegistration = await navigator.serviceWorker.register('service-worker.js');
-          console.log('FCM Service Worker зарегистрирован:', swRegistration);
-
-          const currentToken = await getToken(messaging, {
-            vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8",
-            serviceWorkerRegistration: swRegistration
-          });
-
-          if (currentToken) {
-            console.log('Токен для уведомлений:', currentToken);
-          }
-        } catch (err) {
-          console.log('Ошибка получения токена:', err);
-        }
-      }
-
-      // Подписка на сообщения
-      const q = query(collection(db, 'messages'), orderBy('createdAt'));
-      onSnapshot(q, snapshot => {
-        messagesEl.innerHTML = '';
-        snapshot.forEach(d => {
-          const data = d.data();
-          const div = document.createElement('div');
-          div.className = 'message ' + (data.uid === user.uid ? 'mine' : 'other');
-
-          let timeStr = '';
-          if (data.createdAt) {
-            const date = data.createdAt.toDate();
-            timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-          }
-
-          div.innerHTML = `
-            <span class="author">${data.author}</span>
-            ${data.text}
-            <span class="time">${timeStr}</span>
-          `;
-          messagesEl.appendChild(div);
-        });
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-      });
+      loadMessages();
     } else {
+      currentUser = null;
+      currentUserName = '';
       loginBox.style.display = 'block';
       chat.style.display = 'none';
       userEmail.textContent = '';
-      currentUserName = '';
+      messagesEl.innerHTML = '';
     }
   });
 
-  // Уведомление, когда приложение открыто
-  onMessage(messaging, (payload) => {
-    console.log('Сообщение на переднем плане:', payload);
-    new Notification(payload.notification?.title || 'Новое сообщение', {
-      body: payload.notification?.body || ''
-    });
-  });
+  // --- ЗАГРУЗКА И ПОДПИСКА ---
+  function loadMessages() {
+    // Загружаем историю
+    supabase.from('messages')
+      .select('*')
+      .order('created_at', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) { console.error(error); return; }
+        messagesEl.innerHTML = '';
+        data.forEach(renderMessage);
+        scrollToBottom();
+      });
+
+    // Слушаем новые
+    channel = supabase.channel('custom-all-channel')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          renderMessage(payload.new);
+          scrollToBottom();
+        }
+      )
+      .subscribe();
+  }
+
+  // --- ОТРИСОВКА ---
+  function renderMessage(msg) {
+    const div = document.createElement('div');
+    div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
+   
+    let timeStr = '';
+    if (msg.created_at) {
+      const date = new Date(msg.created_at);
+      timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    div.innerHTML = `
+      <span class="author">${msg.author}</span>
+      ${msg.text}
+      <span class="time">${timeStr}</span>
+    `;
+    messagesEl.appendChild(div);
+  }
+
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
 </script>
 
 <script>
-  // Регистрируем PWA service worker (новое имя файла)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js')
       .then(() => console.log('Service Worker зарегистрирован'))
