@@ -17,8 +17,9 @@
     flex-direction: column;
   }
 
-  /* Форма входа */
+  /* Форма входа (скрыта по умолчанию, показывается через JS) */
   .login-box {
+    display: none;
     width: 100%;
     max-width: 420px;
     margin: auto;
@@ -191,14 +192,26 @@
 </div>
 
 <script type="module">
-  // Подключаем Supabase SDK
   import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
 
-  // Твои ключи
+  // --- КОНФИГ SUPABASE ---
   const SUPABASE_URL = "https://nvjrhrebhlcnnxpjzylx.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52anJocmViaGxjbm54cGp6eWx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ3OTMyNTYsImV4cCI6MjExMDM2OTI1Nn0.BzdRl7PnKIa4HAw9jzPkptiAd9uN2xA_axIwCKdzLqE";
-
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // --- КОНФИГ FIREBASE (для уведомлений) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAk2qhmu4GJQozcU74_FNQWhzk4T7P-gPU",
+    authDomain: "my-messenger-95eda.firebaseapp.com",
+    projectId: "my-messenger-95eda",
+    storageBucket: "my-messenger-95eda.firebasestorage.app",
+    messagingSenderId: "327505492353",
+    appId: "1:327505492353:web:3306144f22b8ac16eb9080"
+  };
+  const firebaseApp = initializeApp(firebaseConfig);
+  const messaging = getMessaging(firebaseApp);
 
   // Элементы
   const loginBox = document.getElementById('loginBox');
@@ -246,9 +259,7 @@
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { name: name }
-      }
+      options: { data: { name: name } }
     });
    
     if (error) {
@@ -298,6 +309,39 @@
       userEmail.textContent = 'Вы вошли как ' + currentUserName;
 
       loadMessages();
+
+      // --- ЗАПРОС УВЕДОМЛЕНИЙ И СОХРАНЕНИЕ ТОКЕНА ---
+      if (Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+      if (Notification.permission === 'granted') {
+        try {
+          const swRegistration = await navigator.serviceWorker.register('service-worker.js');
+         
+          const currentToken = await getToken(messaging, {
+            vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8",
+            serviceWorkerRegistration: swRegistration
+          });
+
+          if (currentToken) {
+            console.log('Токен получен:', currentToken);
+           
+            // СОХРАНЯЕМ В БАЗУ SUPABASE
+            const { error: tokenError } = await supabase
+              .from('push_tokens')
+              .upsert({
+                user_id: currentUser.id,
+                token: currentToken
+              }, { onConflict: 'user_id' });
+
+            if (tokenError) console.error('Ошибка сохранения токена:', tokenError);
+            else console.log('Токен успешно сохранён в Supabase!');
+          }
+        } catch (err) {
+          console.log('Ошибка получения токена:', err);
+        }
+      }
+
     } else {
       currentUser = null;
       currentUserName = '';
@@ -310,7 +354,6 @@
 
   // --- ЗАГРУЗКА И ПОДПИСКА ---
   function loadMessages() {
-    // Загружаем историю
     supabase.from('messages')
       .select('*')
       .order('created_at', { ascending: true })
@@ -321,7 +364,6 @@
         scrollToBottom();
       });
 
-    // Слушаем новые
     channel = supabase.channel('custom-all-channel')
       .on(
         'postgres_changes',
@@ -356,6 +398,14 @@
   function scrollToBottom() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
+
+  // Уведомление, если вкладка открыта
+  onMessage(messaging, (payload) => {
+    console.log('Уведомление на переднем плане:', payload);
+    new Notification(payload.notification?.title || 'Новое сообщение', {
+      body: payload.notification?.body || ''
+    });
+  });
 </script>
 
 <script>
