@@ -289,8 +289,8 @@
       }
       if (Notification.permission === 'granted') {
         try {
-          // Регистрируем service worker для FCM
-          const swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+          // Регистрируем service worker для FCM (новое имя файла)
+          const swRegistration = await navigator.serviceWorker.register('service-worker.js');
           console.log('FCM Service Worker зарегистрирован:', swRegistration);
 
           const currentToken = await getToken(messaging, {
@@ -348,9 +348,9 @@
 </script>
 
 <script>
-  // Регистрируем обычный PWA service worker
+  // Регистрируем PWA service worker (новое имя файла)
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./service-worker.js')
+    navigator.serviceWorker.register('service-worker.js')
       .then(() => console.log('Service Worker зарегистрирован'))
       .catch(err => console.log('Ошибка Service Worker:', err));
   }
