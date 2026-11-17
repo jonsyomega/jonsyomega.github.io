@@ -1,408 +1,47 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Мессенджер (Supabase)</title>
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    min-height: 100vh;
-    background: #0f1115;
-    color: #fff;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: flex;
-    flex-direction: column;
-  }
-  .login-box {
-    display: none;
-    width: 100%;
-    max-width: 420px;
-    margin: auto;
-    background: #161a22;
-    border: 1px solid #262b36;
-    border-radius: 16px;
-    padding: 28px;
-  }
-  .login-box h1 { font-size: 22px; margin-bottom: 16px; text-align: center; }
-  .login-box input {
-    width: 100%;
-    padding: 12px 14px;
-    margin-bottom: 12px;
-    background: #0f1115;
-    border: 1px solid #262b36;
-    border-radius: 10px;
-    color: #fff;
-    font-size: 15px;
-  }
-  .login-box input:focus { outline: none; border-color: #ff7a00; }
-  .login-box button {
-    width: 100%;
-    padding: 13px;
-    background: #ff7a00;
-    border: none;
-    border-radius: 10px;
-    color: #000;
-    font-weight: 600;
-    font-size: 15px;
-    cursor: pointer;
-    margin-bottom: 8px;
-  }
-  .login-box button:hover { opacity: .85; }
-  .login-box button.secondary { background: transparent; border: 1px solid #262b36; color: #fff; }
-  .status { margin-top: 16px; font-size: 13px; color: #8a8f98; text-align: center; min-height: 18px; }
+// Подключаем Firebase для фоновых уведомлений
+importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
-  /* Основной контейнер */
-  .app-container {
-    display: none;
-    flex-direction: column;
-    height: 100vh;
-    max-width: 720px;
-    width: 100%;
-    margin: 0 auto;
-    background: #0f1115;
-  }
-  .app-header {
-    padding: 16px 20px;
-    background: #161a22;
-    border-bottom: 1px solid #262b36;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .app-header .email { font-size: 14px; color: #8a8f98; }
-  .app-header button {
-    padding: 8px 16px;
-    background: transparent;
-    border: 1px solid #262b36;
-    border-radius: 8px;
-    color: #fff;
-    cursor: pointer;
-    font-size: 13px;
-  }
-  .app-header button:hover { border-color: #ff7a00; color: #ff7a00; }
+// Твой конфиг Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyAk2qhmu4GJQozcU74_FNQWhzk4T7P-gPU",
+  authDomain: "my-messenger-95eda.firebaseapp.com",
+  projectId: "my-messenger-95eda",
+  storageBucket: "my-messenger-95eda.firebasestorage.app",
+  messagingSenderId: "327505492353",
+  appId: "1:327505492353:web:3306144f22b8ac16eb9080"
+};
 
-  /* Экран со списком контактов */
-  .contacts-screen { flex: 1; overflow-y: auto; padding: 20px; }
-  .contact-item {
-    display: flex;
-    align-items: center;
-    padding: 14px 20px;
-    background: #161a22;
-    border: 1px solid #262b36;
-    border-radius: 12px;
-    margin-bottom: 10px;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .contact-item:hover { background: #1f252f; border-color: #ff7a00; }
-  .contact-avatar {
-    width: 40px; height: 40px;
-    background: #ff7a00;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: bold; color: #000; font-size: 18px;
-    margin-right: 15px;
-  }
-  .contact-name { font-size: 16px; font-weight: 500; }
+firebase.initializeApp(firebaseConfig);
+const messaging = firebase.messaging();
 
-  /* Экран чата */
-  .chat-screen { display: none; flex-direction: column; flex: 1; height: 100%; }
-  .chat-header {
-    padding: 16px 20px;
-    background: #161a22;
-    border-bottom: 1px solid #262b36;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-  }
-  .back-btn {
-    background: transparent; border: none; color: #ff7a00;
-    font-size: 24px; cursor: pointer; padding-right: 10px;
-  }
-  .chat-title { font-weight: 600; font-size: 16px; }
-
-  .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-  .message { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
-  .message.mine { align-self: flex-end; background: #ff7a00; color: #000; }
-  .message.other { align-self: flex-start; background: #262b36; color: #fff; }
-  .message .time { font-size: 10px; opacity: .6; display: block; margin-top: 4px; text-align: right; }
+// Обработка уведомлений, когда приложение закрыто или свёрнуто
+messaging.onBackgroundMessage((payload) => {
+  console.log('[service-worker.js] Фоновое сообщение:', payload);
  
-  .chat-input { display: flex; gap: 10px; padding: 16px 20px; background: #161a22; border-top: 1px solid #262b36; }
-  .chat-input input { flex: 1; padding: 12px 14px; background: #0f1115; border: 1px solid #262b36; border-radius: 10px; color: #fff; font-size: 15px; }
-  .chat-input input:focus { outline: none; border-color: #ff7a00; }
-  .chat-input button { padding: 12px 22px; background: #ff7a00; border: none; border-radius: 10px; color: #000; font-weight: 600; cursor: pointer; }
-</style>
-</head>
-<body>
-
-<!-- Экран входа -->
-<div class="login-box" id="loginBox">
-  <h1>Мессенджер</h1>
-  <input id="name" type="text" placeholder="Ваше имя (при регистрации)">
-  <input id="email" type="email" placeholder="Email">
-  <input id="password" type="password" placeholder="Пароль">
-  <button id="loginBtn">Войти</button>
-  <button id="signupBtn" class="secondary">Зарегистрироваться</button>
-  <p class="status" id="status"></p>
-</div>
-
-<!-- Основное приложение -->
-<div class="app-container" id="appContainer">
-  <div class="app-header">
-    <span class="email" id="userEmail"></span>
-    <button id="logoutBtn">Выйти</button>
-  </div>
-
-  <!-- Экран 1: Контакты -->
-  <div class="contacts-screen" id="contactsScreen">
-    <h2 style="margin-bottom: 15px; font-size: 18px; color: #8a8f98;">Выберите собеседника</h2>
-    <div id="contactsList"></div>
-  </div>
-
-  <!-- Экран 2: Чат -->
-  <div class="chat-screen" id="chatScreen">
-    <div class="chat-header">
-      <button class="back-btn" id="backBtn">←</button>
-      <span class="chat-title" id="chatTitle">Имя</span>
-    </div>
-    <div class="messages" id="messages"></div>
-    <div class="chat-input">
-      <input id="messageInput" type="text" placeholder="Написать сообщение...">
-      <button id="sendBtn">Отправить</button>
-    </div>
-  </div>
-</div>
-
-<script type="module">
-  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
-
-  const SUPABASE_URL = "https://nvjrhrebhlcnnxpjzylx.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52anJocmViaGxjbm54cGp6eWx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ3OTMyNTYsImV4cCI6MjExMDM2OTI1Nn0.BzdRl7PnKIa4HAw9jzPkptiAd9uN2xA_axIwCKdzLqE";
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyAk2qhmu4GJQozcU74_FNQWhzk4T7P-gPU",
-    authDomain: "my-messenger-95eda.firebaseapp.com",
-    projectId: "my-messenger-95eda",
-    storageBucket: "my-messenger-95eda.firebasestorage.app",
-    messagingSenderId: "327505492353",
-    appId: "1:327505492353:web:3306144f22b8ac16eb9080"
-  };
-  const firebaseApp = initializeApp(firebaseConfig);
-  const messaging = getMessaging(firebaseApp);
-
-  // Элементы
-  const loginBox = document.getElementById('loginBox');
-  const appContainer = document.getElementById('appContainer');
-  const contactsScreen = document.getElementById('contactsScreen');
-  const contactsList = document.getElementById('contactsList');
-  const chatScreen = document.getElementById('chatScreen');
-  const chatTitle = document.getElementById('chatTitle');
-  const messagesEl = document.getElementById('messages');
-  const userEmail = document.getElementById('userEmail');
+  // Берем данные из data (так как мы убрали notification в bright-task)
+  const title = payload.data?.title || 'Новое сообщение';
+  const body = payload.data?.body || 'У вас новое сообщение в чате';
  
-  let currentUser = null;
-  let currentUserName = '';
-  let currentRoomId = null; // ID комнаты (диалога)
-  let currentReceiverName = '';
-  let messageChannel = null; // Канал для сообщений
-  let usersChannel = null; // Канал для обновления списка контактов
-
-  // --- АВТОРИЗАЦИЯ ---
-  document.getElementById('loginBtn').onclick = async () => {
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) document.getElementById('status').textContent = 'Ошибка: ' + error.message;
+  const notificationOptions = {
+    body: body,
+    icon: '/icon-192.png' // Убедись, что эта иконка есть в корне репозитория
   };
 
-  document.getElementById('signupBtn').onclick = async () => {
-    const name = document.getElementById('name').value.trim();
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    const { error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
-    if (error) document.getElementById('status').textContent = 'Ошибка: ' + error.message;
-    else document.getElementById('status').textContent = 'Успешно! Теперь войдите.';
-  };
+  self.registration.showNotification(title, notificationOptions);
+});
 
-  document.getElementById('logoutBtn').onclick = async () => {
-    if (messageChannel) supabase.removeChannel(messageChannel);
-    if (usersChannel) supabase.removeChannel(usersChannel);
-    await supabase.auth.signOut();
-  };
+// Базовый кэш для PWA (чтобы приложение работало и устанавливалось)
+const CACHE_NAME = 'messenger-v1';
 
-  // --- СЛЕЖИМ ЗА ВХОДОМ ---
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    if (session) {
-      currentUser = session.user;
-      currentUserName = currentUser.user_metadata.name || currentUser.email;
-     
-      loginBox.style.display = 'none';
-      appContainer.style.display = 'flex';
-      userEmail.textContent = currentUserName;
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
 
-      loadContacts();
-      setupNotifications();
-    } else {
-      currentUser = null;
-      currentUserName = '';
-      loginBox.style.display = 'block';
-      appContainer.style.display = 'none';
-      chatScreen.style.display = 'none';
-      contactsScreen.style.display = 'block';
-      contactsList.innerHTML = '';
-    }
-  });
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
+});
 
-  // --- СПИСОК КОНТАКТОВ ---
-  function loadContacts() {
-    // Загружаем всех пользователей
-    supabase.from('profiles').select('*').then(({ data, error }) => {
-      if (error) { console.error(error); return; }
-     
-      contactsList.innerHTML = '';
-      data.forEach(user => {
-        // Не показываем себя
-        if (user.id === currentUser.id) return;
-
-        const div = document.createElement('div');
-        div.className = 'contact-item';
-        const initial = (user.name || '?').charAt(0).toUpperCase();
-       
-        div.innerHTML = `
-          <div class="contact-avatar">${initial}</div>
-          <div class="contact-name">${user.name || user.email}</div>
-        `;
-       
-        div.onclick = () => openChat(user.id, user.name || user.email);
-        contactsList.appendChild(div);
-      });
-    });
-
-    // Слушаем появление новых пользователей (чтобы список обновлялся сам)
-    usersChannel = supabase.channel('public:profiles')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, () => {
-        loadContacts(); // Перезагружаем список
-      }).subscribe();
-  }
-
-  // --- ОТКРЫТИЕ ЧАТА ---
-  function openChat(receiverId, receiverName) {
-    currentReceiverName = receiverName;
-    chatTitle.textContent = receiverName;
-   
-    // Создаем уникальный ID комнаты (сортируем ID, чтобы у обоих был одинаковый)
-    const ids = [currentUser.id, receiverId].sort();
-    currentRoomId = `${ids[0]}_${ids[1]}`;
-
-    contactsScreen.style.display = 'none';
-    chatScreen.style.display = 'flex';
-    messagesEl.innerHTML = '';
-   
-    loadMessages();
-  }
-
-  document.getElementById('backBtn').onclick = () => {
-    if (messageChannel) supabase.removeChannel(messageChannel);
-    chatScreen.style.display = 'none';
-    contactsScreen.style.display = 'block';
-    currentRoomId = null;
-  };
-
-  // --- ЗАГРУЗКА И ОТПРАВКА СООБЩЕНИЙ ---
-  function loadMessages() {
-    if (messageChannel) supabase.removeChannel(messageChannel);
-
-    // 1. Загружаем историю для этой комнаты
-    supabase.from('messages')
-      .select('*')
-      .eq('room_id', currentRoomId)
-      .order('created_at', { ascending: true })
-      .then(({ data, error }) => {
-        if (error) { console.error(error); return; }
-        messagesEl.innerHTML = '';
-        data.forEach(renderMessage);
-        scrollToBottom();
-      });
-
-    // 2. Слушаем новые сообщения в реальном времени
-    messageChannel = supabase.channel(`room:${currentRoomId}`)
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
-        (payload) => {
-          renderMessage(payload.new);
-          scrollToBottom();
-        }
-      ).subscribe();
-  }
-
-  async function sendMessage() {
-    const text = document.getElementById('messageInput').value.trim();
-    if (!text || !currentRoomId) return;
-    document.getElementById('messageInput').value = '';
-   
-    await supabase.from('messages').insert({
-      room_id: currentRoomId,
-      text: text,
-      author: currentUserName,
-      uid: currentUser.id
-    });
-  }
-
-  document.getElementById('sendBtn').onclick = sendMessage;
-  document.getElementById('messageInput').onkeydown = (e) => {
-    if (e.key === 'Enter') sendMessage();
-  };
-
-  function renderMessage(msg) {
-    const div = document.createElement('div');
-    div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
-   
-    let timeStr = '';
-    if (msg.created_at) {
-      const date = new Date(msg.created_at);
-      timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    }
-   
-    div.innerHTML = `${msg.text}<span class="time">${timeStr}</span>`;
-    messagesEl.appendChild(div);
-  }
-
-  function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
-
-  // --- УВЕДОМЛЕНИЯ ---
-  async function setupNotifications() {
-    if (Notification.permission === 'default') await Notification.requestPermission();
-    if (Notification.permission !== 'granted') return;
-
-    try {
-      const swRegistration = await navigator.serviceWorker.register('service-worker.js');
-      const currentToken = await getToken(messaging, {
-        vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8",
-        serviceWorkerRegistration: swRegistration
-      });
-
-      if (currentToken) {
-        const { data: existingToken } = await supabase.from('push_tokens').select('id').eq('token', currentToken).limit(1);
-        if (!existingToken || existingToken.length === 0) {
-          await supabase.from('push_tokens').insert({ user_id: currentUser.id, token: currentToken });
-          console.log('Токен сохранен!');
-        }
-      }
-    } catch (err) { console.error(err); }
-  }
-</script>
-
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js').catch(err => console.log(err));
-  }
-</script>
-
-</body>
-</html>
+self.addEventListener('fetch', (event) => {
+  // Пропускаем все запросы в сеть как обычно
+});
