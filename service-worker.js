@@ -15,19 +15,33 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
-// Обработка уведомлений, когда приложение закрыто
+// Обработка уведомлений, когда приложение закрыто или свёрнуто
 messaging.onBackgroundMessage((payload) => {
-  console.log('Фоновое сообщение:', payload);
-  self.registration.showNotification(payload.notification?.title || 'Новое сообщение', {
-    body: payload.notification?.body || 'У вас новое сообщение в чате',
-    icon: '/icon-192.png'
-  });
+  console.log('[service-worker.js] Фоновое сообщение:', payload);
+ 
+  // Берем данные из data (так как мы убрали notification в bright-task)
+  const title = payload.data?.title || 'Новое сообщение';
+  const body = payload.data?.body || 'У вас новое сообщение в чате';
+ 
+  const notificationOptions = {
+    body: body,
+    icon: '/icon-192.png' // Убедись, что эта иконка есть в корне репозитория
+  };
+
+  self.registration.showNotification(title, notificationOptions);
 });
 
-// Базовый кэш для PWA (чтобы приложение работало)
+// Базовый кэш для PWA (чтобы приложение работало и устанавливалось)
 const CACHE_NAME = 'messenger-v1';
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));
-self.addEventListener('fetch', () => {
+
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
+});
+
+self.addEventListener('fetch', (event) => {
   // Пропускаем все запросы в сеть как обычно
 });
