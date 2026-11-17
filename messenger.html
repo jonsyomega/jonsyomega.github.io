@@ -17,7 +17,7 @@
     flex-direction: column;
   }
   .login-box {
-    display: none; /* Скрыто по умолчанию, показывается через JS */
+    display: none;
     width: 100%;
     max-width: 420px;
     margin: auto;
@@ -232,16 +232,25 @@
       if (currentToken) {
         console.log('Токен получен:', currentToken);
        
-        // УДАЛЯЕМ СТАРЫЙ ТОКЕН И ВСТАВЛЯЕМ НОВЫЙ (обходим ошибку 42P10)
-        await supabase.from('push_tokens').delete().eq('user_id', currentUser.id);
-       
-        const { error } = await supabase.from('push_tokens').insert({
-          user_id: currentUser.id,
-          token: currentToken
-        });
-       
-        if (error) console.error('Ошибка сохранения токена:', error);
-        else console.log('Токен успешно сохранен в базе!');
+        // Проверяем, есть ли уже такой токен в базе
+        const { data: existingToken } = await supabase
+          .from('push_tokens')
+          .select('id')
+          .eq('token', currentToken)
+          .limit(1);
+
+        // Если токена нет — сохраняем
+        if (!existingToken || existingToken.length === 0) {
+          const { error } = await supabase.from('push_tokens').insert({
+            user_id: currentUser.id,
+            token: currentToken
+          });
+         
+          if (error) console.error('Ошибка сохранения токена:', error);
+          else console.log('Токен успешно сохранен в базе!');
+        } else {
+          console.log('Этот токен уже есть в базе, пропускаем.');
+        }
       }
     } catch (err) { console.error('Ошибка получения токена:', err); }
   }
