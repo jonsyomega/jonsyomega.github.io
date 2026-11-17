@@ -16,10 +16,8 @@
     display: flex;
     flex-direction: column;
   }
-
-  /* Форма входа (скрыта по умолчанию, показывается через JS) */
   .login-box {
-    display: none;
+    display: none; /* Скрыто по умолчанию, показывается через JS */
     width: 100%;
     max-width: 420px;
     margin: auto;
@@ -53,20 +51,9 @@
     margin-bottom: 8px;
   }
   .login-box button:hover { opacity: .85; }
-  .login-box button.secondary {
-    background: transparent;
-    border: 1px solid #262b36;
-    color: #fff;
-  }
-  .status {
-    margin-top: 16px;
-    font-size: 13px;
-    color: #8a8f98;
-    text-align: center;
-    min-height: 18px;
-  }
+  .login-box button.secondary { background: transparent; border: 1px solid #262b36; color: #fff; }
+  .status { margin-top: 16px; font-size: 13px; color: #8a8f98; text-align: center; min-height: 18px; }
 
-  /* Чат */
   .chat {
     display: none;
     flex-direction: column;
@@ -95,79 +82,21 @@
     font-size: 13px;
   }
   .chat-header button:hover { border-color: #ff7a00; color: #ff7a00; }
-
-  .messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .message {
-    max-width: 75%;
-    padding: 10px 14px;
-    border-radius: 12px;
-    font-size: 15px;
-    line-height: 1.4;
-    word-wrap: break-word;
-  }
-  .message.mine {
-    align-self: flex-end;
-    background: #ff7a00;
-    color: #000;
-  }
-  .message.other {
-    align-self: flex-start;
-    background: #262b36;
-    color: #fff;
-  }
-  .message .author {
-    font-size: 11px;
-    opacity: .7;
-    display: block;
-    margin-bottom: 4px;
-  }
-  .message .time {
-    font-size: 10px;
-    opacity: .6;
-    display: block;
-    margin-top: 4px;
-    text-align: right;
-  }
-
-  .chat-input {
-    display: flex;
-    gap: 10px;
-    padding: 16px 20px;
-    background: #161a22;
-    border-top: 1px solid #262b36;
-  }
-  .chat-input input {
-    flex: 1;
-    padding: 12px 14px;
-    background: #0f1115;
-    border: 1px solid #262b36;
-    border-radius: 10px;
-    color: #fff;
-    font-size: 15px;
-  }
+  .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .message { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
+  .message.mine { align-self: flex-end; background: #ff7a00; color: #000; }
+  .message.other { align-self: flex-start; background: #262b36; color: #fff; }
+  .message .author { font-size: 11px; opacity: .7; display: block; margin-bottom: 4px; }
+  .message .time { font-size: 10px; opacity: .6; display: block; margin-top: 4px; text-align: right; }
+  .chat-input { display: flex; gap: 10px; padding: 16px 20px; background: #161a22; border-top: 1px solid #262b36; }
+  .chat-input input { flex: 1; padding: 12px 14px; background: #0f1115; border: 1px solid #262b36; border-radius: 10px; color: #fff; font-size: 15px; }
   .chat-input input:focus { outline: none; border-color: #ff7a00; }
-  .chat-input button {
-    padding: 12px 22px;
-    background: #ff7a00;
-    border: none;
-    border-radius: 10px;
-    color: #000;
-    font-weight: 600;
-    cursor: pointer;
-  }
+  .chat-input button { padding: 12px 22px; background: #ff7a00; border: none; border-radius: 10px; color: #000; font-weight: 600; cursor: pointer; }
   .chat-input button:hover { opacity: .85; }
 </style>
 </head>
 <body>
 
-<!-- Форма входа -->
 <div class="login-box" id="loginBox">
   <h1>Мессенджер</h1>
   <input id="name" type="text" placeholder="Ваше имя (при регистрации)">
@@ -178,7 +107,6 @@
   <p class="status" id="status"></p>
 </div>
 
-<!-- Чат -->
 <div class="chat" id="chat">
   <div class="chat-header">
     <span class="email" id="userEmail"></span>
@@ -196,12 +124,10 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
 
-  // --- КОНФИГ SUPABASE ---
   const SUPABASE_URL = "https://nvjrhrebhlcnnxpjzylx.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52anJocmViaGxjbm54cGp6eWx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ3OTMyNTYsImV4cCI6MjExMDM2OTI1Nn0.BzdRl7PnKIa4HAw9jzPkptiAd9uN2xA_axIwCKdzLqE";
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // --- КОНФИГ FIREBASE (для уведомлений) ---
   const firebaseConfig = {
     apiKey: "AIzaSyAk2qhmu4GJQozcU74_FNQWhzk4T7P-gPU",
     authDomain: "my-messenger-95eda.firebaseapp.com",
@@ -213,7 +139,6 @@
   const firebaseApp = initializeApp(firebaseConfig);
   const messaging = getMessaging(firebaseApp);
 
-  // Элементы
   const loginBox = document.getElementById('loginBox');
   const chat = document.getElementById('chat');
   const status = document.getElementById('status');
@@ -232,76 +157,49 @@
   let currentUserName = '';
   let channel = null;
 
-  // --- ВХОД ---
   loginBtn.addEventListener('click', async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value;
     if (!email || !password) { status.textContent = 'Введите email и пароль'; return; }
-   
     status.textContent = 'Вход...';
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      status.textContent = 'Ошибка: ' + error.message;
-    } else {
-      status.textContent = '';
-    }
+    if (error) status.textContent = 'Ошибка: ' + error.message;
+    else status.textContent = '';
   });
 
-  // --- РЕГИСТРАЦИЯ ---
   signupBtn.addEventListener('click', async () => {
     const name = nameInput.value.trim();
     const email = emailInput.value.trim();
     const password = passwordInput.value;
-    if (!email || !password) { status.textContent = 'Введите email и пароль'; return; }
-    if (!name) { status.textContent = 'Введите имя'; return; }
-
+    if (!email || !password || !name) { status.textContent = 'Заполните все поля'; return; }
     status.textContent = 'Регистрация...';
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name: name } }
+    const { error } = await supabase.auth.signUp({
+      email, password, options: { data: { name: name } }
     });
-   
-    if (error) {
-      status.textContent = 'Ошибка: ' + error.message;
-    } else {
-      status.textContent = 'Успешно! Теперь можно войти.';
-      nameInput.value = '';
-    }
+    if (error) status.textContent = 'Ошибка: ' + error.message;
+    else { status.textContent = 'Успешно! Теперь войдите.'; nameInput.value = ''; }
   });
 
-  // --- ВЫХОД ---
   logoutBtn.addEventListener('click', async () => {
     if (channel) supabase.removeChannel(channel);
     await supabase.auth.signOut();
   });
 
-  // --- ОТПРАВКА ---
   async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text || !currentUser) return;
     messageInput.value = '';
-   
     const { error } = await supabase.from('messages').insert({
-      text: text,
-      author: currentUserName,
-      uid: currentUser.id
+      text, author: currentUserName, uid: currentUser.id
     });
-
-    if (error) {
-      console.error('Ошибка отправки:', error);
-      alert('Не удалось отправить сообщение: ' + error.message);
-    }
+    if (error) alert('Ошибка отправки: ' + error.message);
   }
   sendBtn.addEventListener('click', sendMessage);
-  messageInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') sendMessage();
-  });
+  messageInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
 
-  // --- СЛЕЖИМ ЗА АВТОРИЗАЦИЕЙ ---
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (session) {
-      currentUser = session.user;
+      currentUser = session.user; // ТЕПЕРЬ ПОЛЬЗОВАТЕЛЬ ТОЧНО ЕСТЬ
       currentUserName = currentUser.user_metadata.name || currentUser.email;
      
       loginBox.style.display = 'none';
@@ -309,39 +207,7 @@
       userEmail.textContent = 'Вы вошли как ' + currentUserName;
 
       loadMessages();
-
-      // --- ЗАПРОС УВЕДОМЛЕНИЙ И СОХРАНЕНИЕ ТОКЕНА ---
-      if (Notification.permission === 'default') {
-        await Notification.requestPermission();
-      }
-      if (Notification.permission === 'granted') {
-        try {
-          const swRegistration = await navigator.serviceWorker.register('service-worker.js');
-         
-          const currentToken = await getToken(messaging, {
-            vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8",
-            serviceWorkerRegistration: swRegistration
-          });
-
-          if (currentToken) {
-            console.log('Токен получен:', currentToken);
-           
-            // СОХРАНЯЕМ В БАЗУ SUPABASE
-            const { error: tokenError } = await supabase
-              .from('push_tokens')
-              .upsert({
-                user_id: currentUser.id,
-                token: currentToken
-              }, { onConflict: 'user_id' });
-
-            if (tokenError) console.error('Ошибка сохранения токена:', tokenError);
-            else console.log('Токен успешно сохранён в Supabase!');
-          }
-        } catch (err) {
-          console.log('Ошибка получения токена:', err);
-        }
-      }
-
+      setupNotifications();
     } else {
       currentUser = null;
       currentUserName = '';
@@ -352,69 +218,69 @@
     }
   });
 
-  // --- ЗАГРУЗКА И ПОДПИСКА ---
+  // ФУНКЦИЯ ДЛЯ УВЕДОМЛЕНИЙ (вызывается только когда пользователь залогинен)
+  async function setupNotifications() {
+    if (Notification.permission === 'default') await Notification.requestPermission();
+    if (Notification.permission !== 'granted') return;
+
+    try {
+      const swRegistration = await navigator.serviceWorker.register('service-worker.js');
+      const currentToken = await getToken(messaging, {
+        vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8",
+        serviceWorkerRegistration: swRegistration
+      });
+
+      if (currentToken) {
+        console.log('Токен получен:', currentToken);
+        const { error } = await supabase.from('push_tokens').upsert({
+          user_id: currentUser.id, token: currentToken
+        }, { onConflict: 'user_id' });
+        if (error) console.error('Ошибка сохранения токена:', error);
+        else console.log('Токен успешно сохранен в базе!');
+      }
+    } catch (err) { console.error('Ошибка получения токена:', err); }
+  }
+
   function loadMessages() {
-    supabase.from('messages')
-      .select('*')
-      .order('created_at', { ascending: true })
+    if (channel) supabase.removeChannel(channel); // Убираем старую подписку, чтобы избежать ошибки
+
+    supabase.from('messages').select('*').order('created_at', { ascending: true })
       .then(({ data, error }) => {
-        if (error) { console.error(error); return; }
+        if (error) return console.error(error);
         messagesEl.innerHTML = '';
         data.forEach(renderMessage);
         scrollToBottom();
       });
 
     channel = supabase.channel('custom-all-channel')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
-        (payload) => {
-          renderMessage(payload.new);
-          scrollToBottom();
-        }
-      )
-      .subscribe();
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => { renderMessage(payload.new); scrollToBottom(); }
+      ).subscribe();
   }
 
-  // --- ОТРИСОВКА ---
   function renderMessage(msg) {
     const div = document.createElement('div');
     div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
-   
     let timeStr = '';
     if (msg.created_at) {
       const date = new Date(msg.created_at);
       timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     }
-
-    div.innerHTML = `
-      <span class="author">${msg.author}</span>
-      ${msg.text}
-      <span class="time">${timeStr}</span>
-    `;
+    div.innerHTML = `<span class="author">${msg.author}</span>${msg.text}<span class="time">${timeStr}</span>`;
     messagesEl.appendChild(div);
   }
 
-  function scrollToBottom() {
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
-  // Уведомление, если вкладка открыта
-  onMessage(messaging, (payload) => {
-    console.log('Уведомление на переднем плане:', payload);
-    new Notification(payload.notification?.title || 'Новое сообщение', {
-      body: payload.notification?.body || ''
-    });
-  });
+  function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+  onMessage(messaging, (payload) => { console.log('Пуш на переднем плане:', payload); });
 </script>
 
 <script>
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js')
-      .then(() => console.log('Service Worker зарегистрирован'))
-      .catch(err => console.log('Ошибка Service Worker:', err));
+    navigator.serviceWorker.register('service-worker.js').catch(err => console.log(err));
   }
 </script>
 
+</body>
+</html>
 </body>
 </html>
