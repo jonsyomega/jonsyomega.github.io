@@ -199,7 +199,7 @@
 
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (session) {
-      currentUser = session.user; // ТЕПЕРЬ ПОЛЬЗОВАТЕЛЬ ТОЧНО ЕСТЬ
+      currentUser = session.user;
       currentUserName = currentUser.user_metadata.name || currentUser.email;
      
       loginBox.style.display = 'none';
@@ -218,7 +218,6 @@
     }
   });
 
-  // ФУНКЦИЯ ДЛЯ УВЕДОМЛЕНИЙ (вызывается только когда пользователь залогинен)
   async function setupNotifications() {
     if (Notification.permission === 'default') await Notification.requestPermission();
     if (Notification.permission !== 'granted') return;
@@ -232,9 +231,15 @@
 
       if (currentToken) {
         console.log('Токен получен:', currentToken);
-        const { error } = await supabase.from('push_tokens').upsert({
-          user_id: currentUser.id, token: currentToken
-        }, { onConflict: 'user_id' });
+       
+        // УДАЛЯЕМ СТАРЫЙ ТОКЕН И ВСТАВЛЯЕМ НОВЫЙ (обходим ошибку 42P10)
+        await supabase.from('push_tokens').delete().eq('user_id', currentUser.id);
+       
+        const { error } = await supabase.from('push_tokens').insert({
+          user_id: currentUser.id,
+          token: currentToken
+        });
+       
         if (error) console.error('Ошибка сохранения токена:', error);
         else console.log('Токен успешно сохранен в базе!');
       }
@@ -242,7 +247,7 @@
   }
 
   function loadMessages() {
-    if (channel) supabase.removeChannel(channel); // Убираем старую подписку, чтобы избежать ошибки
+    if (channel) supabase.removeChannel(channel);
 
     supabase.from('messages').select('*').order('created_at', { ascending: true })
       .then(({ data, error }) => {
@@ -280,7 +285,5 @@
   }
 </script>
 
-</body>
-</html>
 </body>
 </html>
