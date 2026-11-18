@@ -54,7 +54,6 @@
   .login-box button.secondary { background: transparent; border: 1px solid #262b36; color: #fff; }
   .status { margin-top: 16px; font-size: 13px; color: #8a8f98; text-align: center; min-height: 18px; }
 
-  /* Основной контейнер */
   .app-container {
     display: none;
     flex-direction: column;
@@ -208,10 +207,9 @@
  
   let currentUser = null;
   let currentUserName = '';
-  let currentRoomId = null; // ID комнаты (диалога)
-  let currentReceiverName = '';
-  let messageChannel = null; // Канал для сообщений
-  let usersChannel = null; // Канал для обновления списка контактов
+  let currentRoomId = null;
+  let messageChannel = null;
+  let usersChannel = null;
 
   // --- АВТОРИЗАЦИЯ ---
   document.getElementById('loginBtn').onclick = async () => {
@@ -261,42 +259,50 @@
 
   // --- СПИСОК КОНТАКТОВ ---
   function loadContacts() {
-    // Загружаем всех пользователей
+    // 1. Загружаем список
     supabase.from('profiles').select('*').then(({ data, error }) => {
-      if (error) { console.error(error); return; }
+      if (error) { console.error('Ошибка загрузки контактов:', error); return; }
      
-      contactsList.innerHTML = '';
-      data.forEach(user => {
-        // Не показываем себя
-        if (user.id === currentUser.id) return;
-
-        const div = document.createElement('div');
-        div.className = 'contact-item';
-        const initial = (user.name || '?').charAt(0).toUpperCase();
-       
-        div.innerHTML = `
-          <div class="contact-avatar">${initial}</div>
-          <div class="contact-name">${user.name || user.email}</div>
-        `;
-       
-        div.onclick = () => openChat(user.id, user.name || user.email);
-        contactsList.appendChild(div);
-      });
+      renderContactsList(data);
     });
 
-    // Слушаем появление новых пользователей (чтобы список обновлялся сам)
-    usersChannel = supabase.channel('public:profiles')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, () => {
-        loadContacts(); // Перезагружаем список
-      }).subscribe();
+    // 2. Слушаем обновления (только один раз)
+    if (!usersChannel) {
+      usersChannel = supabase.channel('public:profiles')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, () => {
+          // Если кто-то новый зарегался, просто перезапрашиваем список и рисуем
+          supabase.from('profiles').select('*').then(({ data }) => {
+            if (data) renderContactsList(data);
+          });
+        })
+        .subscribe();
+    }
+  }
+
+  function renderContactsList(users) {
+    contactsList.innerHTML = '';
+    users.forEach(user => {
+      if (user.id === currentUser.id) return; // Себя не показываем
+
+      const div = document.createElement('div');
+      div.className = 'contact-item';
+      const initial = (user.name || '?').charAt(0).toUpperCase();
+     
+      div.innerHTML = `
+        <div class="contact-avatar">${initial}</div>
+        <div class="contact-name">${user.name || user.email}</div>
+      `;
+     
+      div.onclick = () => openChat(user.id, user.name || user.email);
+      contactsList.appendChild(div);
+    });
   }
 
   // --- ОТКРЫТИЕ ЧАТА ---
   function openChat(receiverId, receiverName) {
-    currentReceiverName = receiverName;
     chatTitle.textContent = receiverName;
    
-    // Создаем уникальный ID комнаты (сортируем ID, чтобы у обоих был одинаковый)
+    // Создаем уникальный ID комнаты
     const ids = [currentUser.id, receiverId].sort();
     currentRoomId = `${ids[0]}_${ids[1]}`;
 
@@ -314,11 +320,10 @@
     currentRoomId = null;
   };
 
-  // --- ЗАГРУЗКА И ОТПРАВКА СООБЩЕНИЙ ---
+  // --- СООБЩЕНИЯ ---
   function loadMessages() {
     if (messageChannel) supabase.removeChannel(messageChannel);
 
-    // 1. Загружаем историю для этой комнаты
     supabase.from('messages')
       .select('*')
       .eq('room_id', currentRoomId)
@@ -330,7 +335,6 @@
         scrollToBottom();
       });
 
-    // 2. Слушаем новые сообщения в реальном времени
     messageChannel = supabase.channel(`room:${currentRoomId}`)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
@@ -391,7 +395,6 @@
         const { data: existingToken } = await supabase.from('push_tokens').select('id').eq('token', currentToken).limit(1);
         if (!existingToken || existingToken.length === 0) {
           await supabase.from('push_tokens').insert({ user_id: currentUser.id, token: currentToken });
-          console.log('Токен сохранен!');
         }
       }
     } catch (err) { console.error(err); }
