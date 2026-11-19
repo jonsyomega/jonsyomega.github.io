@@ -310,75 +310,25 @@
   };
 
   // --- СПИСОК НЕДАВНИХ ЧАТОВ ---
-let isLoadingChats = false; // Защита от двойного запуска
-
-async function loadRecentChats() {
-  // Если уже загружаем — выходим, чтобы не было дублей
-  if (isLoadingChats) return;
-  isLoadingChats = true;
- 
-  contactsList.innerHTML = '<p style="color:#8a8f98; font-size:14px;">Загрузка...</p>';
- 
-  try {
+  async function loadRecentChats() {
+    contactsList.innerHTML = '<p style="color:#8a8f98; font-size:14px;">Загрузка...</p>';
+   
     // Получаем все сообщения, где участвует текущий пользователь
     const { data: messages, error } = await supabase
       .from('messages')
       .select('room_id')
       .like('room_id', `%${currentUser.id}%`);
 
-    if (error) throw error;
+    if (error) { console.error(error); return; }
 
     // Оставляем только уникальные ID комнат
     const uniqueRooms = [...new Set(messages.map(m => m.room_id))];
    
-    // Создаем невидимый контейнер для элементов
-    const fragment = document.createDocumentFragment();
-   
-    if (uniqueRooms.length === 0) {
-      const p = document.createElement('p');
-      p.style.color = '#8a8f98';
-      p.style.fontSize = '14px';
-      p.textContent = 'У вас пока нет переписок. Найдите собеседника по Email выше.';
-      fragment.appendChild(p);
-    } else {
-      // Для каждой комнаты находим ID собеседника и его профиль
-      for (const room of uniqueRooms) {
-        const usersInRoom = room.split('_');
-        const otherUserId = usersInRoom.find(id => id !== currentUser.id);
-       
-        let displayName = 'Собеседник';
-        let initial = '?';
-
-        // Используем нашу безопасную функцию из Supabase (RPC)
-        const { data: profileData } = await supabase.rpc('get_contact_profile', { other_user_id: otherUserId });
-       
-        if (profileData && profileData.length > 0) {
-          displayName = profileData[0].name || profileData[0].email;
-          initial = displayName.charAt(0).toUpperCase();
-        }
-
-        const div = document.createElement('div');
-        div.className = 'contact-item';
-        div.innerHTML = `
-          <div class="contact-avatar">${initial}</div>
-          <div class="contact-name">${displayName}</div>
-        `;
-        div.onclick = () => openChat(otherUserId, displayName);
-        fragment.appendChild(div);
-      }
-    }
-   
-    // Показываем всё разом
     contactsList.innerHTML = '';
-    contactsList.appendChild(fragment);
-   
-  } catch (err) {
-    console.error(err);
-    contactsList.innerHTML = '<p style="color:red; font-size:14px;">Ошибка загрузки чатов</p>';
-  } finally {
-    isLoadingChats = false; // Снимаем блокировку
-  }
-}
+    if (uniqueRooms.length === 0) {
+      contactsList.innerHTML = '<p style="color:#8a8f98; font-size:14px;">У вас пока нет переписок. Найдите собеседника по Email выше.</p>';
+      return;
+    }
 
     // Для каждой комнаты находим ID собеседника и его профиль
     for (const room of uniqueRooms) {
