@@ -83,7 +83,32 @@
   }
   .app-header button:hover { border-color: #ff7a00; color: #ff7a00; }
 
+  /* Экран со списком контактов */
   .contacts-screen { flex: 1; overflow-y: auto; padding: 20px; }
+ 
+  .search-box {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 25px;
+  }
+  .search-box input {
+    flex: 1;
+    padding: 12px;
+    background: #161a22;
+    border: 1px solid #262b36;
+    border-radius: 10px;
+    color: #fff;
+  }
+  .search-box button {
+    padding: 0 20px;
+    background: #ff7a00;
+    border: none;
+    border-radius: 10px;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
   .contact-item {
     display: flex;
     align-items: center;
@@ -106,6 +131,7 @@
   }
   .contact-name { font-size: 16px; font-weight: 500; }
 
+  /* Экран чата */
   .chat-screen { display: none; flex-direction: column; flex: 1; height: 100%; }
   .chat-header {
     padding: 16px 20px;
@@ -151,11 +177,18 @@
     <button id="logoutBtn">Выйти</button>
   </div>
 
+  <!-- Экран 1: Контакты и поиск -->
   <div class="contacts-screen" id="contactsScreen">
-    <h2 style="margin-bottom: 15px; font-size: 18px; color: #8a8f98;">Выберите собеседника</h2>
+    <div class="search-box">
+      <input id="searchEmail" type="email" placeholder="Введите Email собеседника...">
+      <button id="searchBtn">Найти</button>
+    </div>
+   
+    <h2 style="margin-bottom: 15px; font-size: 18px; color: #8a8f98;">Недавние чаты</h2>
     <div id="contactsList"></div>
   </div>
 
+  <!-- Экран 2: Чат -->
   <div class="chat-screen" id="chatScreen">
     <div class="chat-header">
       <button class="back-btn" id="backBtn">←</button>
@@ -189,7 +222,6 @@
   const firebaseApp = initializeApp(firebaseConfig);
   const messaging = getMessaging(firebaseApp);
 
-  // Элементы
   const loginBox = document.getElementById('loginBox');
   const appContainer = document.getElementById('appContainer');
   const contactsScreen = document.getElementById('contactsScreen');
@@ -203,7 +235,6 @@
   let currentUserName = '';
   let currentRoomId = null;
   let messageChannel = null;
-  let usersChannel = null;
 
   // --- АВТОРИЗАЦИЯ ---
   document.getElementById('loginBtn').onclick = async () => {
@@ -224,7 +255,6 @@
 
   document.getElementById('logoutBtn').onclick = async () => {
     if (messageChannel) supabase.removeChannel(messageChannel);
-    if (usersChannel) supabase.removeChannel(usersChannel);
     await supabase.auth.signOut();
   };
 
@@ -238,7 +268,7 @@
       appContainer.style.display = 'flex';
       userEmail.textContent = currentUserName;
 
-      loadContacts();
+      loadRecentChats();
       setupNotifications();
     } else {
       currentUser = null;
@@ -251,41 +281,86 @@
     }
   });
 
-  // --- СПИСОК КОНТАКТОВ ---
-  function loadContacts() {
-    supabase.from('profiles').select('*').then(({ data, error }) => {
-      if (error) { console.error('Ошибка загрузки контактов:', error); return; }
-      renderContactsList(data);
-    });
+  // --- ПОИСК ПО EMAIL ---
+  document.getElementById('searchBtn').onclick = async () => {
+    const emailToFind = document.getElementById('searchEmail').value.trim();
+    if (!emailToFind) return;
 
-    if (!usersChannel) {
-      usersChannel = supabase.channel('public:profiles')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, () => {
-          supabase.from('profiles').select('*').then(({ data }) => {
-            if (data) renderContactsList(data);
-          });
-        })
-        .subscribe();
+    // Ищем пользователя по email в таблице profiles
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', emailToFind)
+      .limit(1);
+
+    if (error || !data || data.length === 0) {
+      alert('Пользователь с таким email не найден!');
+      return;
     }
-  }
 
-  function renderContactsList(users) {
+    const user = data[0];
+    if (user.id === currentUser.id) {
+      alert('Это ваш собственный email!');
+      return;
+    }
+
+    // Открываем чат с найденным пользователем
+    document.getElementById('searchEmail').value = '';
+    openChat(user.id, user.name || user.email);
+  };
+
+  // --- СПИСОК НЕДАВНИХ ЧАТОВ ---
+  async function loadRecentChats() {
+    contactsList.innerHTML = '<p style="color:#8a8f98; font-size:14px;">Загрузка...</p>';
+   
+    // Получаем все сообщения, где участвует текущий пользователь
+    const { data: messages, error } = await supabase
+      .from('messages')
+      .select('room_id')
+      .like('room_id', `%${currentUser.id}%`);
+
+    if (error) { console.error(error); return; }
+
+    // Оставляем только уникальные ID комнат
+    const uniqueRooms = [...new Set(messages.map(m => m.room_id))];
+   
     contactsList.innerHTML = '';
-    users.forEach(user => {
-      if (user.id === currentUser.id) return;
+    if (uniqueRooms.length === 0) {
+      contactsList.innerHTML = '<p style="color:#8a8f98; font-size:14px;">У вас пока нет переписок. Найдите собеседника по Email выше.</p>';
+      return;
+    }
+
+    // Для каждой комнаты находим ID собеседника и его профиль
+    for (const room of uniqueRooms) {
+      const usersInRoom = room.split('_');
+      const otherUserId = usersInRoom.find(id => id !== currentUser.id);
+     
+      // Запрашиваем профиль собеседника (по правилам RLS мы можем видеть только себя,
+      // поэтому нам нужно временное правило или функция в базе для этого).
+      // В реальном проекте лучше использовать RPC. Для простоты сделаем прямой запрос.
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', otherUserId)
+        .limit(1);
+
+      let displayName = 'Собеседник';
+      let initial = '?';
+
+      if (profile && profile.length > 0) {
+        displayName = profile[0].name || profile[0].email;
+        initial = displayName.charAt(0).toUpperCase();
+      }
 
       const div = document.createElement('div');
       div.className = 'contact-item';
-      const initial = (user.name || '?').charAt(0).toUpperCase();
-     
       div.innerHTML = `
         <div class="contact-avatar">${initial}</div>
-        <div class="contact-name">${user.name || user.email}</div>
+        <div class="contact-name">${displayName}</div>
       `;
-     
-      div.onclick = () => openChat(user.id, user.name || user.email);
+      div.onclick = () => openChat(otherUserId, displayName);
       contactsList.appendChild(div);
-    });
+    }
   }
 
   // --- ОТКРЫТИЕ ЧАТА ---
@@ -388,29 +463,16 @@
   }
 
   // --- ПЕРЕХОД ПО ПУШУ ---
-  // Проверяем, есть ли в URL параметры (после клика по уведомлению)
   const urlParams = new URLSearchParams(window.location.search);
   const roomIdFromUrl = urlParams.get('room');
   const senderIdFromUrl = urlParams.get('sender');
 
-  // Если мы перешли по пушу, ждем загрузки контактов и открываем чат
   if (roomIdFromUrl && senderIdFromUrl) {
-    // Ждем, пока пользователь авторизуется и загрузятся контакты
     const checkAuth = setInterval(() => {
-      if (currentUser && contactsList.children.length > 0) {
+      if (currentUser) {
         clearInterval(checkAuth);
-       
-        // Ищем имя отправителя в списке контактов (чтобы красиво отобразить в шапке)
-        let senderName = 'Собеседник';
-        const contacts = contactsList.querySelectorAll('.contact-item');
-        contacts.forEach(c => {
-          if (c.onclick.toString().includes(senderIdFromUrl)) {
-            senderName = c.querySelector('.contact-name').textContent;
-          }
-        });
-
-        openChat(senderIdFromUrl, senderName);
-        // Очищаем URL, чтобы при обновлении страницы не открывался этот же чат
+        // Открываем чат с отправителем
+        openChat(senderIdFromUrl, 'Собеседник');
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }, 500);
