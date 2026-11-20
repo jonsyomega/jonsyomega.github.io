@@ -83,7 +83,6 @@
   }
   .app-header button:hover { border-color: #ff7a00; color: #ff7a00; }
 
-  /* Экран со списком контактов */
   .contacts-screen { flex: 1; overflow-y: auto; padding: 20px; }
  
   .search-box {
@@ -132,7 +131,6 @@
   }
   .contact-name { font-size: 16px; font-weight: 500; }
 
-  /* Экран чата */
   .chat-screen { display: none; flex-direction: column; flex: 1; height: 100%; }
   .chat-header {
     padding: 16px 20px;
@@ -178,7 +176,6 @@
     <button id="logoutBtn">Выйти</button>
   </div>
 
-  <!-- Экран 1: Контакты и поиск -->
   <div class="contacts-screen" id="contactsScreen">
     <div class="search-box">
       <input id="searchEmail" type="email" placeholder="Введите Email собеседника...">
@@ -189,7 +186,6 @@
     <div id="contactsList"></div>
   </div>
 
-  <!-- Экран 2: Чат -->
   <div class="chat-screen" id="chatScreen">
     <div class="chat-header">
       <button class="back-btn" id="backBtn">←</button>
@@ -204,24 +200,12 @@
 </div>
 
 <script type="module">
+  // Импортируем ТОЛЬКО Supabase в начале. Firebase загрузим позже.
   import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
 
   const SUPABASE_URL = "https://nvjrhrebhlcnnxpjzylx.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52anJocmViaGxjbm54cGp6eWx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ3OTMyNTYsImV4cCI6MjExMDM2OTI1Nn0.BzdRl7PnKIa4HAw9jzPkptiAd9uN2xA_axIwCKdzLqE";
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyAk2qhmu4GJQozcU74_FNQWhzk4T7P-gPU",
-    authDomain: "my-messenger-95eda.firebaseapp.com",
-    projectId: "my-messenger-95eda",
-    storageBucket: "my-messenger-95eda.firebasestorage.app",
-    messagingSenderId: "327505492353",
-    appId: "1:327505492353:web:3306144f22b8ac16eb9080"
-  };
-  const firebaseApp = initializeApp(firebaseConfig);
-  const messaging = getMessaging(firebaseApp);
 
   const loginBox = document.getElementById('loginBox');
   const appContainer = document.getElementById('appContainer');
@@ -236,6 +220,7 @@
   let currentUserName = '';
   let currentRoomId = null;
   let messageChannel = null;
+  let isLoadingChats = false;
 
   // --- АВТОРИЗАЦИЯ ---
   document.getElementById('loginBtn').onclick = async () => {
@@ -270,7 +255,7 @@
       userEmail.textContent = currentUserName;
 
       loadRecentChats();
-      setupNotifications();
+      setupNotifications(); // Вызываем функцию, которая теперь безопасно грузит Firebase
     } else {
       currentUser = null;
       currentUserName = '';
@@ -287,12 +272,7 @@
     const emailToFind = document.getElementById('searchEmail').value.trim();
     if (!emailToFind) return;
 
-    // Ищем пользователя по email в таблице profiles
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('email', emailToFind)
-      .limit(1);
+    const { data, error } = await supabase.from('profiles').select('*').eq('email', emailToFind).limit(1);
 
     if (error || !data || data.length === 0) {
       alert('Пользователь с таким email не найден!');
@@ -310,8 +290,6 @@
   };
 
   // --- СПИСОК НЕДАВНИХ ЧАТОВ ---
-  let isLoadingChats = false;
-
   async function loadRecentChats() {
     if (isLoadingChats) return;
     isLoadingChats = true;
@@ -319,11 +297,7 @@
     contactsList.innerHTML = '<p style="color:#8a8f98; font-size:14px;">Загрузка...</p>';
    
     try {
-      const { data: messages, error } = await supabase
-        .from('messages')
-        .select('room_id')
-        .like('room_id', `%${currentUser.id}%`);
-
+      const { data: messages, error } = await supabase.from('messages').select('room_id').like('room_id', `%${currentUser.id}%`);
       if (error) throw error;
 
       const uniqueRooms = [...new Set(messages.map(m => m.room_id))];
@@ -353,10 +327,7 @@
 
           const div = document.createElement('div');
           div.className = 'contact-item';
-          div.innerHTML = `
-            <div class="contact-avatar">${initial}</div>
-            <div class="contact-name">${displayName}</div>
-          `;
+          div.innerHTML = `<div class="contact-avatar">${initial}</div><div class="contact-name">${displayName}</div>`;
           div.onclick = () => openChat(otherUserId, displayName);
           fragment.appendChild(div);
         }
@@ -364,10 +335,9 @@
      
       contactsList.innerHTML = '';
       contactsList.appendChild(fragment);
-     
     } catch (err) {
       console.error(err);
-      contactsList.innerHTML = '<p style="color:red; font-size:14px;">Ошибка загрузки чатов</p>';
+      contactsList.innerHTML = '<p style="color:red; font-size:14px;">Ошибка загрузки чатов. Возможно, не выполнена SQL-функция.</p>';
     } finally {
       isLoadingChats = false;
     }
@@ -390,17 +360,14 @@
     chatScreen.style.display = 'none';
     contactsScreen.style.display = 'block';
     currentRoomId = null;
-    loadRecentChats(); // Обновляем список при возврате
+    loadRecentChats();
   };
 
   // --- СООБЩЕНИЯ ---
   function loadMessages() {
     if (messageChannel) supabase.removeChannel(messageChannel);
 
-    supabase.from('messages')
-      .select('*')
-      .eq('room_id', currentRoomId)
-      .order('created_at', { ascending: true })
+    supabase.from('messages').select('*').eq('room_id', currentRoomId).order('created_at', { ascending: true })
       .then(({ data, error }) => {
         if (error) { console.error(error); return; }
         messagesEl.innerHTML = '';
@@ -409,12 +376,8 @@
       });
 
     messageChannel = supabase.channel(`room:${currentRoomId}`)
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
-        (payload) => {
-          renderMessage(payload.new);
-          scrollToBottom();
-        }
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
+        (payload) => { renderMessage(payload.new); scrollToBottom(); }
       ).subscribe();
   }
 
@@ -424,10 +387,7 @@
     document.getElementById('messageInput').value = '';
    
     await supabase.from('messages').insert({
-      room_id: currentRoomId,
-      text: text,
-      author: currentUserName,
-      uid: currentUser.id
+      room_id: currentRoomId, text: text, author: currentUserName, uid: currentUser.id
     });
   }
 
@@ -439,25 +399,39 @@
   function renderMessage(msg) {
     const div = document.createElement('div');
     div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
-   
     let timeStr = '';
     if (msg.created_at) {
       const date = new Date(msg.created_at);
       timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     }
-   
     div.innerHTML = `${msg.text}<span class="time">${timeStr}</span>`;
     messagesEl.appendChild(div);
   }
 
   function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
-  // --- УВЕДОМЛЕНИЯ ---
+  // --- БЕЗОПАСНЫЙ ЗАПУСК УВЕДОМЛЕНИЙ (Firebase) ---
   async function setupNotifications() {
-    if (Notification.permission === 'default') await Notification.requestPermission();
-    if (Notification.permission !== 'granted') return;
-
     try {
+      // Динамически подгружаем Firebase. Если сеть заблокирована, чат продолжит работать.
+      const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+      const { getMessaging, getToken, onMessage } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js");
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyAk2qhmu4GJQozcU74_FNQWhzk4T7P-gPU",
+        authDomain: "my-messenger-95eda.firebaseapp.com",
+        projectId: "my-messenger-95eda",
+        storageBucket: "my-messenger-95eda.firebasestorage.app",
+        messagingSenderId: "327505492353",
+        appId: "1:327505492353:web:3306144f22b8ac16eb9080"
+      };
+     
+      const app = initializeApp(firebaseConfig);
+      const messaging = getMessaging(app);
+
+      if (Notification.permission === 'default') await Notification.requestPermission();
+      if (Notification.permission !== 'granted') return;
+
       const swRegistration = await navigator.serviceWorker.register('service-worker.js');
       const currentToken = await getToken(messaging, {
         vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8",
@@ -470,7 +444,9 @@
           await supabase.from('push_tokens').insert({ user_id: currentUser.id, token: currentToken });
         }
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.log("Уведомления недоступны (возможно, заблокирован Google):", err);
+    }
   }
 
   // --- ПЕРЕХОД ПО ПУШУ ---
@@ -482,7 +458,6 @@
     const checkAuth = setInterval(() => {
       if (currentUser) {
         clearInterval(checkAuth);
-        // Пытаемся получить имя отправителя для шапки чата
         supabase.rpc('get_contact_profile', { other_user_id: senderIdFromUrl }).then(({data}) => {
            let name = 'Собеседник';
            if (data && data.length > 0) name = data[0].name || data[0].email;
@@ -493,12 +468,5 @@
     }, 500);
   }
 </script>
-
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js').catch(err => console.log(err));
-  }
-</script>
-
 </body>
 </html>
