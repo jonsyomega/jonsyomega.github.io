@@ -504,7 +504,16 @@
         serviceWorkerRegistration: swRegistration
       });
 
-      const urlParams = new URLSearchParams(window.location.search);
+      if (currentToken) {
+        const { data: existingToken } = await supabase.from('push_tokens').select('id').eq('token', currentToken).limit(1);
+        if (!existingToken || existingToken.length === 0) {
+          await supabase.from('push_tokens').insert({ user_id: currentUser.id, token: currentToken });
+        }
+      }
+    } catch (err) { console.error(err); }
+  }
+
+  const urlParams = new URLSearchParams(window.location.search);
   const roomIdFromUrl = urlParams.get('room');
   const senderIdFromUrl = urlParams.get('sender');
 
