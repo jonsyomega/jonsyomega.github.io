@@ -112,7 +112,13 @@
   .message { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
   .message.mine { align-self: flex-end; background: #ff7a00; color: #000; }
   .message.other { align-self: flex-start; background: #262b36; color: #fff; }
-  .message .time { font-size: 10px; opacity: .6; display: block; margin-top: 4px; text-align: right; }
+ 
+  /* Стили для времени и галочек */
+  .message .time {
+    font-size: 10px; opacity: .6; display: inline-block; margin-left: 8px; float: right; margin-top: 4px;
+  }
+  .message .checks { font-size: 12px; margin-left: 4px; color: rgba(0,0,0,0.4); font-weight: bold; }
+  .message .checks.read { color: #000; } /* Черные галочки, когда прочитано */
  
   .message img { max-width: 100%; border-radius: 8px; margin-top: 5px; display: block; }
   .message .file-link { display: flex; align-items: center; gap: 8px; text-decoration: none; font-weight: bold; margin-top: 5px; }
@@ -336,6 +342,9 @@
     chatScreen.style.display = 'flex';
     messagesEl.innerHTML = '';
     loadMessages();
+   
+    // Помечаем входящие сообщения как прочитанные
+    markMessagesAsRead();
   }
 
   document.getElementById('backBtn').onclick = () => {
@@ -345,6 +354,19 @@
     currentRoomId = null;
     loadRecentChats();
   };
+
+  // --- ФУНКЦИЯ ОТМЕТКИ "ПРОЧИТАНО" ---
+  async function markMessagesAsRead() {
+    if (!currentRoomId || !currentUser) return;
+   
+    // Обновляем все сообщения в комнате, которые отправил НЕ я и которые еще не прочитаны
+    await supabase
+      .from('messages')
+      .update({ is_read: true })
+      .eq('room_id', currentRoomId)
+      .neq('uid', currentUser.id)
+      .eq('is_read', false);
+  }
 
   // --- СООБЩЕНИЯ ---
   function loadMessages() {
@@ -359,8 +381,27 @@
       });
 
     messageChannel = supabase.channel(`room:${currentRoomId}`)
+      // Слушаем НОВЫЕ сообщения
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
-        (payload) => { renderMessage(payload.new); scrollToBottom(); }
+        (payload) => {
+          renderMessage(payload.new);
+          scrollToBottom();
+          // Если пришло сообщение от другого, и мы в чате - сразу читаем
+          if (payload.new.uid !== currentUser.id) markMessagesAsRead();
+        }
+      )
+      // Слушаем ОБНОВЛЕНИЯ (когда собеседник прочитал)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
+        (payload) => {
+           const msgDiv = document.getElementById(`msg-${payload.new.id}`);
+           if (msgDiv) {
+               const checks = msgDiv.querySelector('.checks');
+               if (checks && payload.new.is_read) {
+                   checks.innerHTML = '✓✓';
+                   checks.classList.add('read');
+               }
+           }
+        }
       ).subscribe();
   }
 
@@ -375,7 +416,8 @@
       text: text,
       author: currentUserName,
       uid: currentUser.id,
-      message_type: 'text'
+      message_type: 'text',
+      is_read: false // По умолчанию не прочитано
     });
   }
 
@@ -399,30 +441,23 @@
 
     try {
       const fileExt = file.name.split('.').pop();
-      // Оставляем уникальное имя для ссылки, чтобы избежать конфликтов
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${currentRoomId}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('chat_files')
-        .upload(filePath, file);
-
+      const { error: uploadError } = await supabase.storage.from('chat_files').upload(filePath, file);
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('chat_files')
-        .getPublicUrl(filePath);
-
+      const { data: { publicUrl } } = supabase.storage.from('chat_files').getPublicUrl(filePath);
       const isImage = file.type.startsWith('image/');
      
-      // ДОБАВЛЯЕМ file_name В БАЗУ
       await supabase.from('messages').insert({
         room_id: currentRoomId,
         text: publicUrl,
-        file_name: file.name, // Сохраняем оригинальное имя!
+        file_name: file.name,
         author: currentUserName,
         uid: currentUser.id,
-        message_type: isImage ? 'image' : 'file'
+        message_type: isImage ? 'image' : 'file',
+        is_read: false
       });
 
     } catch (err) {
@@ -438,34 +473,35 @@
   function renderMessage(msg) {
     const div = document.createElement('div');
     div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
+    div.id = `msg-${msg.id}`; // Даем ID, чтобы потом находить сообщение для обновления галочек
    
     let timeStr = '';
     if (msg.created_at) {
       const date = new Date(msg.created_at);
       timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     }
-   
+
+    // Логика галочек (только для моих сообщений)
+    let checksHtml = '';
+    if (msg.uid === currentUser.id) {
+        if (msg.is_read) {
+            checksHtml = `<span class="checks read">✓✓</span>`;
+        } else {
+            checksHtml = `<span class="checks">✓</span>`;
+        }
+    }
+
+    let contentHtml = '';
     if (msg.message_type === 'image') {
-      div.innerHTML = `
-        <img src="${msg.text}" alt="Картинка" onload="scrollToBottom()">
-        <span class="time">${timeStr}</span>
-      `;
+      contentHtml = `<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
     } else if (msg.message_type === 'file') {
-      // ИСПОЛЬЗУЕМ file_name ИЗ БАЗЫ (или старую логику для старых сообщений)
-      let fileName = msg.file_name;
-      if (!fileName) {
-          // Если это старое сообщение (до обновления), парсим из URL
-          fileName = decodeURIComponent(msg.text.split('/').pop().split('_').slice(1).join('_'));
-      }
-     
-      div.innerHTML = `
-        <a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a>
-        <span class="time">${timeStr}</span>
-      `;
+      let fileName = msg.file_name || 'Файл';
+      contentHtml = `<a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a><span class="time">${timeStr}${checksHtml}</span>`;
     } else {
-      div.innerHTML = `${msg.text}<span class="time">${timeStr}</span>`;
+      contentHtml = `${msg.text}<span class="time">${timeStr}${checksHtml}</span>`;
     }
    
+    div.innerHTML = contentHtml;
     messagesEl.appendChild(div);
   }
 
@@ -480,43 +516,4 @@
       const swRegistration = await navigator.serviceWorker.register('service-worker.js');
       const currentToken = await getToken(messaging, {
         vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8",
-        serviceWorkerRegistration: swRegistration
-      });
-
-      if (currentToken) {
-        const { data: existingToken } = await supabase.from('push_tokens').select('id').eq('token', currentToken).limit(1);
-        if (!existingToken || existingToken.length === 0) {
-          await supabase.from('push_tokens').insert({ user_id: currentUser.id, token: currentToken });
-        }
-      }
-    } catch (err) { console.error(err); }
-  }
-
-  // --- ПЕРЕХОД ПО ПУШУ ---
-  const urlParams = new URLSearchParams(window.location.search);
-  const roomIdFromUrl = urlParams.get('room');
-  const senderIdFromUrl = urlParams.get('sender');
-
-  if (roomIdFromUrl && senderIdFromUrl) {
-    const checkAuth = setInterval(() => {
-      if (currentUser) {
-        clearInterval(checkAuth);
-        supabase.rpc('get_contact_profile', { other_user_id: senderIdFromUrl }).then(({data}) => {
-           let name = 'Собеседник';
-           if (data && data.length > 0) name = data[0].name || data[0].email;
-           openChat(senderIdFromUrl, name);
-        });
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-    }, 500);
-  }
-</script>
-
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js').catch(err => console.log(err));
-  }
-</script>
-
-</body>
-</html>
+        serviceWorkerRegistration: swRegist
