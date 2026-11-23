@@ -220,7 +220,6 @@
 
   // --- ТЕПЕРЬ БЕЗОПАСНО ИНИЦИАЛИЗИРУЕМ FIREBASE ---
   let messaging = null;
-  let firebaseApp = null;
  
   try {
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
@@ -235,7 +234,7 @@
       appId: "1:327505492353:web:3306144f22b8ac16eb9080"
     };
    
-    firebaseApp = initializeApp(firebaseConfig);
+    const firebaseApp = initializeApp(firebaseConfig);
     messaging = getMessaging(firebaseApp);
   } catch (e) {
     console.log("Firebase не загрузился (уведомления могут не работать):", e);
@@ -505,16 +504,7 @@
         serviceWorkerRegistration: swRegistration
       });
 
-      if (currentToken) {
-        const { data: existingToken } = await supabase.from('push_tokens').select('id').eq('token', currentToken).limit(1);
-        if (!existingToken || existingToken.length === 0) {
-          await supabase.from('push_tokens').insert({ user_id: currentUser.id, token: currentToken });
-        }
-      }
-    } catch (err) { console.error(err); }
-  }
-
-  const urlParams = new URLSearchParams(window.location.search);
+      const urlParams = new URLSearchParams(window.location.search);
   const roomIdFromUrl = urlParams.get('room');
   const senderIdFromUrl = urlParams.get('sender');
 
