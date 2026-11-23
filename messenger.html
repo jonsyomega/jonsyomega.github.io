@@ -17,7 +17,7 @@
     flex-direction: column;
   }
   .login-box {
-    display: none;
+    display: block; /* Форма входа видна всегда, пока не зашли */
     width: 100%;
     max-width: 420px;
     margin: auto;
@@ -85,65 +85,27 @@
 
   .contacts-screen { flex: 1; overflow-y: auto; padding: 20px; }
  
-  .search-box {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 25px;
-  }
-  .search-box input {
-    flex: 1;
-    padding: 12px;
-    background: #161a22;
-    border: 1px solid #262b36;
-    border-radius: 10px;
-    color: #fff;
-  }
+  .search-box { display: flex; gap: 10px; margin-bottom: 25px; }
+  .search-box input { flex: 1; padding: 12px; background: #161a22; border: 1px solid #262b36; border-radius: 10px; color: #fff; }
   .search-box input:focus { outline: none; border-color: #ff7a00; }
-  .search-box button {
-    padding: 0 20px;
-    background: #ff7a00;
-    border: none;
-    border-radius: 10px;
-    color: #000;
-    font-weight: bold;
-    cursor: pointer;
-  }
+  .search-box button { padding: 0 20px; background: #ff7a00; border: none; border-radius: 10px; color: #000; font-weight: bold; cursor: pointer; }
 
   .contact-item {
-    display: flex;
-    align-items: center;
-    padding: 14px 20px;
-    background: #161a22;
-    border: 1px solid #262b36;
-    border-radius: 12px;
-    margin-bottom: 10px;
-    cursor: pointer;
-    transition: background 0.2s;
+    display: flex; align-items: center; padding: 14px 20px;
+    background: #161a22; border: 1px solid #262b36; border-radius: 12px;
+    margin-bottom: 10px; cursor: pointer; transition: background 0.2s;
   }
   .contact-item:hover { background: #1f252f; border-color: #ff7a00; }
   .contact-avatar {
-    width: 40px; height: 40px;
-    background: #ff7a00;
-    border-radius: 50%;
+    width: 40px; height: 40px; background: #ff7a00; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-weight: bold; color: #000; font-size: 18px;
-    margin-right: 15px;
+    font-weight: bold; color: #000; font-size: 18px; margin-right: 15px;
   }
   .contact-name { font-size: 16px; font-weight: 500; }
 
   .chat-screen { display: none; flex-direction: column; flex: 1; height: 100%; }
-  .chat-header {
-    padding: 16px 20px;
-    background: #161a22;
-    border-bottom: 1px solid #262b36;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-  }
-  .back-btn {
-    background: transparent; border: none; color: #ff7a00;
-    font-size: 24px; cursor: pointer; padding-right: 10px;
-  }
+  .chat-header { padding: 16px 20px; background: #161a22; border-bottom: 1px solid #262b36; display: flex; align-items: center; gap: 15px; }
+  .back-btn { background: transparent; border: none; color: #ff7a00; font-size: 24px; cursor: pointer; padding-right: 10px; }
   .chat-title { font-weight: 600; font-size: 16px; }
 
   .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
@@ -152,10 +114,22 @@
   .message.other { align-self: flex-start; background: #262b36; color: #fff; }
   .message .time { font-size: 10px; opacity: .6; display: block; margin-top: 4px; text-align: right; }
  
-  .chat-input { display: flex; gap: 10px; padding: 16px 20px; background: #161a22; border-top: 1px solid #262b36; }
-  .chat-input input { flex: 1; padding: 12px 14px; background: #0f1115; border: 1px solid #262b36; border-radius: 10px; color: #fff; font-size: 15px; }
-  .chat-input input:focus { outline: none; border-color: #ff7a00; }
+  /* Стили для картинок и файлов в сообщениях */
+  .message img { max-width: 100%; border-radius: 8px; margin-top: 5px; display: block; }
+  .message .file-link { display: flex; align-items: center; gap: 8px; text-decoration: none; font-weight: bold; margin-top: 5px; }
+  .message.mine .file-link { color: #000; }
+  .message.other .file-link { color: #fff; }
+ 
+  .chat-input { display: flex; gap: 10px; padding: 16px 20px; background: #161a22; border-top: 1px solid #262b36; align-items: center; }
+  .chat-input input[type="text"] { flex: 1; padding: 12px 14px; background: #0f1115; border: 1px solid #262b36; border-radius: 10px; color: #fff; font-size: 15px; }
+  .chat-input input[type="text"]:focus { outline: none; border-color: #ff7a00; }
   .chat-input button { padding: 12px 22px; background: #ff7a00; border: none; border-radius: 10px; color: #000; font-weight: 600; cursor: pointer; }
+ 
+  .attach-btn {
+    background: transparent; border: none; font-size: 24px; cursor: pointer; color: #8a8f98;
+    padding: 0 5px; transition: color 0.2s;
+  }
+  .attach-btn:hover { color: #ff7a00; }
 </style>
 </head>
 <body>
@@ -181,7 +155,6 @@
       <input id="searchEmail" type="email" placeholder="Введите Email собеседника...">
       <button id="searchBtn">Найти</button>
     </div>
-   
     <h2 style="margin-bottom: 15px; font-size: 18px; color: #8a8f98;">Недавние чаты</h2>
     <div id="contactsList"></div>
   </div>
@@ -193,6 +166,10 @@
     </div>
     <div class="messages" id="messages"></div>
     <div class="chat-input">
+      <!-- Кнопка скрепки и скрытый инпут -->
+      <button class="attach-btn" id="attachBtn" title="Прикрепить файл">📎</button>
+      <input type="file" id="fileInput" style="display: none;" accept="image/*,application/pdf">
+     
       <input id="messageInput" type="text" placeholder="Написать сообщение...">
       <button id="sendBtn">Отправить</button>
     </div>
@@ -303,7 +280,7 @@
 
   // --- СПИСОК НЕДАВНИХ ЧАТОВ ---
   async function loadRecentChats() {
-    if (isLoadingChats) return; // Защита от дублей
+    if (isLoadingChats) return;
     isLoadingChats = true;
    
     contactsList.innerHTML = '<p style="color:#8a8f98; font-size:14px;">Загрузка...</p>';
@@ -329,7 +306,6 @@
           let displayName = 'Собеседник';
           let initial = '?';
 
-          // Безопасный запрос имени через RPC
           const { data: profileData } = await supabase.rpc('get_contact_profile', { other_user_id: otherUserId });
          
           if (profileData && profileData.length > 0) {
@@ -372,7 +348,7 @@
     chatScreen.style.display = 'none';
     contactsScreen.style.display = 'block';
     currentRoomId = null;
-    loadRecentChats(); // Обновляем список при возврате
+    loadRecentChats();
   };
 
   // --- СООБЩЕНИЯ ---
@@ -393,13 +369,18 @@
       ).subscribe();
   }
 
+  // --- ОТПРАВКА ТЕКСТА ---
   async function sendMessage() {
     const text = document.getElementById('messageInput').value.trim();
     if (!text || !currentRoomId) return;
     document.getElementById('messageInput').value = '';
    
     await supabase.from('messages').insert({
-      room_id: currentRoomId, text: text, author: currentUserName, uid: currentUser.id
+      room_id: currentRoomId,
+      text: text,
+      author: currentUserName,
+      uid: currentUser.id,
+      message_type: 'text'
     });
   }
 
@@ -408,15 +389,88 @@
     if (e.key === 'Enter') sendMessage();
   };
 
+  // --- ОТПРАВКА ФАЙЛОВ ---
+  const attachBtn = document.getElementById('attachBtn');
+  const fileInput = document.getElementById('fileInput');
+
+  attachBtn.onclick = () => fileInput.click();
+
+  fileInput.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !currentRoomId) return;
+
+    // Показываем, что файл грузится
+    messagesEl.innerHTML += '<div class="message other" id="loadingMsg">Загрузка файла...</div>';
+    scrollToBottom();
+
+    try {
+      // Генерируем уникальное имя файла
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `${currentRoomId}/${fileName}`;
+
+      // Загружаем в Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('chat_files')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Получаем публичную ссылку
+      const { data: { publicUrl } } = supabase.storage
+        .from('chat_files')
+        .getPublicUrl(filePath);
+
+      // Определяем тип файла
+      const isImage = file.type.startsWith('image/');
+     
+      // Сохраняем сообщение в базу
+      await supabase.from('messages').insert({
+        room_id: currentRoomId,
+        text: publicUrl, // Ссылка на файл
+        author: currentUserName,
+        uid: currentUser.id,
+        message_type: isImage ? 'image' : 'file'
+      });
+
+    } catch (err) {
+      alert('Ошибка загрузки: ' + err.message);
+    } finally {
+      fileInput.value = ''; // Очищаем инпут
+      const loading = document.getElementById('loadingMsg');
+      if (loading) loading.remove();
+    }
+  };
+
+  // --- ОТРИСОВКА СООБЩЕНИЙ ---
   function renderMessage(msg) {
     const div = document.createElement('div');
     div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
+   
     let timeStr = '';
     if (msg.created_at) {
       const date = new Date(msg.created_at);
       timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     }
-    div.innerHTML = `${msg.text}<span class="time">${timeStr}</span>`;
+   
+    // Проверяем тип сообщения (текст, картинка или файл)
+    if (msg.message_type === 'image') {
+      div.innerHTML = `
+        <img src="${msg.text}" alt="Картинка" onload="scrollToBottom()">
+        <span class="time">${timeStr}</span>
+      `;
+    } else if (msg.message_type === 'file') {
+      // Достаем имя файла из URL
+      const fileName = decodeURIComponent(msg.text.split('/').pop().split('_').slice(1).join('_'));
+      div.innerHTML = `
+        <a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a>
+        <span class="time">${timeStr}</span>
+      `;
+    } else {
+      // Обычный текст
+      div.innerHTML = `${msg.text}<span class="time">${timeStr}</span>`;
+    }
+   
     messagesEl.appendChild(div);
   }
 
@@ -452,14 +506,11 @@
     const checkAuth = setInterval(() => {
       if (currentUser) {
         clearInterval(checkAuth);
-       
-        // Получаем имя отправителя для красивого заголовка
         supabase.rpc('get_contact_profile', { other_user_id: senderIdFromUrl }).then(({data}) => {
            let name = 'Собеседник';
            if (data && data.length > 0) name = data[0].name || data[0].email;
            openChat(senderIdFromUrl, name);
         });
-       
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }, 500);
