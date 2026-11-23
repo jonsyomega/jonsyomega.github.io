@@ -17,7 +17,7 @@
     flex-direction: column;
   }
   .login-box {
-    display: block; /* Форма входа видна всегда, пока не зашли */
+    display: block;
     width: 100%;
     max-width: 420px;
     margin: auto;
@@ -114,7 +114,6 @@
   .message.other { align-self: flex-start; background: #262b36; color: #fff; }
   .message .time { font-size: 10px; opacity: .6; display: block; margin-top: 4px; text-align: right; }
  
-  /* Стили для картинок и файлов в сообщениях */
   .message img { max-width: 100%; border-radius: 8px; margin-top: 5px; display: block; }
   .message .file-link { display: flex; align-items: center; gap: 8px; text-decoration: none; font-weight: bold; margin-top: 5px; }
   .message.mine .file-link { color: #000; }
@@ -125,10 +124,7 @@
   .chat-input input[type="text"]:focus { outline: none; border-color: #ff7a00; }
   .chat-input button { padding: 12px 22px; background: #ff7a00; border: none; border-radius: 10px; color: #000; font-weight: 600; cursor: pointer; }
  
-  .attach-btn {
-    background: transparent; border: none; font-size: 24px; cursor: pointer; color: #8a8f98;
-    padding: 0 5px; transition: color 0.2s;
-  }
+  .attach-btn { background: transparent; border: none; font-size: 24px; cursor: pointer; color: #8a8f98; padding: 0 5px; transition: color 0.2s; }
   .attach-btn:hover { color: #ff7a00; }
 </style>
 </head>
@@ -166,7 +162,6 @@
     </div>
     <div class="messages" id="messages"></div>
     <div class="chat-input">
-      <!-- Кнопка скрепки и скрытый инпут -->
       <button class="attach-btn" id="attachBtn" title="Прикрепить файл">📎</button>
       <input type="file" id="fileInput" style="display: none;" accept="image/*,application/pdf">
      
@@ -399,35 +394,32 @@
     const file = e.target.files[0];
     if (!file || !currentRoomId) return;
 
-    // Показываем, что файл грузится
     messagesEl.innerHTML += '<div class="message other" id="loadingMsg">Загрузка файла...</div>';
     scrollToBottom();
 
     try {
-      // Генерируем уникальное имя файла
       const fileExt = file.name.split('.').pop();
+      // Оставляем уникальное имя для ссылки, чтобы избежать конфликтов
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${currentRoomId}/${fileName}`;
 
-      // Загружаем в Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('chat_files')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // Получаем публичную ссылку
       const { data: { publicUrl } } = supabase.storage
         .from('chat_files')
         .getPublicUrl(filePath);
 
-      // Определяем тип файла
       const isImage = file.type.startsWith('image/');
      
-      // Сохраняем сообщение в базу
+      // ДОБАВЛЯЕМ file_name В БАЗУ
       await supabase.from('messages').insert({
         room_id: currentRoomId,
-        text: publicUrl, // Ссылка на файл
+        text: publicUrl,
+        file_name: file.name, // Сохраняем оригинальное имя!
         author: currentUserName,
         uid: currentUser.id,
         message_type: isImage ? 'image' : 'file'
@@ -436,7 +428,7 @@
     } catch (err) {
       alert('Ошибка загрузки: ' + err.message);
     } finally {
-      fileInput.value = ''; // Очищаем инпут
+      fileInput.value = '';
       const loading = document.getElementById('loadingMsg');
       if (loading) loading.remove();
     }
@@ -453,21 +445,24 @@
       timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     }
    
-    // Проверяем тип сообщения (текст, картинка или файл)
     if (msg.message_type === 'image') {
       div.innerHTML = `
         <img src="${msg.text}" alt="Картинка" onload="scrollToBottom()">
         <span class="time">${timeStr}</span>
       `;
     } else if (msg.message_type === 'file') {
-      // Достаем имя файла из URL
-      const fileName = decodeURIComponent(msg.text.split('/').pop().split('_').slice(1).join('_'));
+      // ИСПОЛЬЗУЕМ file_name ИЗ БАЗЫ (или старую логику для старых сообщений)
+      let fileName = msg.file_name;
+      if (!fileName) {
+          // Если это старое сообщение (до обновления), парсим из URL
+          fileName = decodeURIComponent(msg.text.split('/').pop().split('_').slice(1).join('_'));
+      }
+     
       div.innerHTML = `
         <a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a>
         <span class="time">${timeStr}</span>
       `;
     } else {
-      // Обычный текст
       div.innerHTML = `${msg.text}<span class="time">${timeStr}</span>`;
     }
    
