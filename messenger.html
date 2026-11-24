@@ -104,7 +104,6 @@
   .contact-info { flex: 1; display: flex; flex-direction: column; }
   .contact-name { font-size: 16px; font-weight: 500; }
  
-  /* Стили для счетчика непрочитанных */
   .unread-badge {
     background: #ff3b30; color: #fff; border-radius: 20px;
     padding: 2px 8px; font-size: 12px; font-weight: bold;
@@ -114,7 +113,11 @@
   .chat-screen { display: none; flex-direction: column; flex: 1; height: 100%; }
   .chat-header { padding: 16px 20px; background: #161a22; border-bottom: 1px solid #262b36; display: flex; align-items: center; gap: 15px; }
   .back-btn { background: transparent; border: none; color: #ff7a00; font-size: 24px; cursor: pointer; padding-right: 10px; }
+ 
+  /* Стили для статуса "Печатает..." */
+  .chat-title-wrapper { display: flex; flex-direction: column; }
   .chat-title { font-weight: 600; font-size: 16px; }
+  .typing-indicator { font-size: 12px; color: #ff7a00; height: 14px; display: none; }
 
   .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
   .message { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
@@ -169,7 +172,11 @@
   <div class="chat-screen" id="chatScreen">
     <div class="chat-header">
       <button class="back-btn" id="backBtn">←</button>
-      <span class="chat-title" id="chatTitle">Имя</span>
+      <!-- Обертка для имени и статуса -->
+      <div class="chat-title-wrapper">
+        <span class="chat-title" id="chatTitle">Имя</span>
+        <span class="typing-indicator" id="typingIndicator">печатает...</span>
+      </div>
     </div>
     <div class="messages" id="messages"></div>
     <div class="chat-input">
@@ -195,8 +202,10 @@
   const contactsList = document.getElementById('contactsList');
   const chatScreen = document.getElementById('chatScreen');
   const chatTitle = document.getElementById('chatTitle');
+  const typingIndicator = document.getElementById('typingIndicator');
   const messagesEl = document.getElementById('messages');
   const userEmail = document.getElementById('userEmail');
+  const messageInput = document.getElementById('messageInput');
  
   let currentUser = null;
   let currentUserName = '';
@@ -204,6 +213,7 @@
   let messageChannel = null;
   let globalChannel = null;
   let isLoadingChats = false;
+  let typingTimeout = null;
 
   // --- АВТОРИЗАЦИЯ ---
   document.getElementById('loginBtn').onclick = async () => {
@@ -228,7 +238,7 @@
     await supabase.auth.signOut();
   };
 
-  // --- БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ FIREBASE ---
+  // --- FIREBASE ---
   let messaging = null;
   try {
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
@@ -256,7 +266,7 @@
       userEmail.textContent = currentUserName;
 
       loadRecentChats();
-      setupGlobalListener(); // Слушаем новые сообщения для счетчика
+      setupGlobalListener();
       if (messaging) setupNotifications();
     } else {
       currentUser = null;
@@ -269,22 +279,14 @@
     }
   });
 
-  // --- ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ (чтобы обновлять счетчик) ---
   function setupGlobalListener() {
     if (globalChannel) supabase.removeChannel(globalChannel);
-   
     globalChannel = supabase.channel('global-messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        // Если мы на экране контактов и сообщение не от нас — обновляем список
-        if (contactsScreen.style.display !== 'none' && payload.new.uid !== currentUser.id) {
-          loadRecentChats();
-        }
+        if (contactsScreen.style.display !== 'none' && payload.new.uid !== currentUser.id) loadRecentChats();
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (payload) => {
-        // Если сообщение прочитали (на другом устройстве) — обновляем счетчик
-        if (contactsScreen.style.display !== 'none') {
-           loadRecentChats();
-        }
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () => {
+        if (contactsScreen.style.display !== 'none') loadRecentChats();
       })
       .subscribe();
   }
@@ -300,23 +302,15 @@
     openChat(user.id, user.name || user.email);
   };
 
-  // --- СПИСОК ЧАТОВ С ПОДСЧЕТОМ НЕПРОЧИТАННЫХ ---
   async function loadRecentChats() {
     if (isLoadingChats) return;
     isLoadingChats = true;
-   
     contactsList.innerHTML = '<p style="color:#8a8f98; font-size:14px;">Загрузка...</p>';
    
     try {
-      // Запрашиваем ВСЕ сообщения для текущего пользователя
-      const { data: messages, error } = await supabase
-        .from('messages')
-        .select('room_id, uid, is_read')
-        .like('room_id', `%${currentUser.id}%`);
-
+      const { data: messages, error } = await supabase.from('messages').select('room_id, uid, is_read').like('room_id', `%${currentUser.id}%`);
       if (error) throw error;
 
-      // Считаем непрочитанные по каждой комнате
       const unreadCounts = {};
       messages.forEach(msg => {
         if (msg.uid !== currentUser.id && !msg.is_read) {
@@ -361,12 +355,10 @@
           fragment.appendChild(div);
         }
       }
-     
       contactsList.innerHTML = '';
       contactsList.appendChild(fragment);
     } catch (err) {
       console.error(err);
-      contactsList.innerHTML = '<p style="color:red; font-size:14px;">Ошибка загрузки чатов.</p>';
     } finally {
       isLoadingChats = false;
     }
@@ -374,6 +366,7 @@
 
   function openChat(receiverId, receiverName) {
     chatTitle.textContent = receiverName;
+    typingIndicator.style.display = 'none'; // Сбрасываем статус при открытии
     const ids = [currentUser.id, receiverId].sort();
     currentRoomId = `${ids[0]}_${ids[1]}`;
 
@@ -389,7 +382,7 @@
     chatScreen.style.display = 'none';
     contactsScreen.style.display = 'block';
     currentRoomId = null;
-    loadRecentChats(); // Перезагружаем список при выходе из чата
+    loadRecentChats();
   };
 
   async function markMessagesAsRead() {
@@ -408,11 +401,13 @@
         scrollToBottom();
       });
 
+    // Канал для сообщений + Broadcast для "Печатает..."
     messageChannel = supabase.channel(`room:${currentRoomId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
         (payload) => {
           renderMessage(payload.new);
           scrollToBottom();
+          typingIndicator.style.display = 'none'; // Если пришло сообщение — значит, перестал печатать
           if (payload.new.uid !== currentUser.id) markMessagesAsRead();
         }
       )
@@ -427,23 +422,61 @@
                }
            }
         }
-      ).subscribe();
+      )
+      // СЛУШАЕМ СОБЫТИЕ "ПЕЧАТАЕТ"
+      .on('broadcast', { event: 'typing' }, (payload) => {
+          if (payload.payload.userId !== currentUser.id) {
+              if (payload.payload.isTyping) {
+                  typingIndicator.style.display = 'block';
+              } else {
+                  typingIndicator.style.display = 'none';
+              }
+          }
+      })
+      .subscribe();
   }
 
-  async function sendMessage() {
-    const text = document.getElementById('messageInput').value.trim();
-    if (!text || !currentRoomId) return;
-    document.getElementById('messageInput').value = '';
+  // --- ЛОГИКА ОТПРАВКИ "ПЕЧАТАЕТ" ---
+  messageInput.addEventListener('input', () => {
+    if (!messageChannel) return;
    
+    // Отправляем сигнал, что печатаем
+    messageChannel.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { userId: currentUser.id, isTyping: true }
+    });
+
+    // Сбрасываем таймер (если печатает долго, сигнал не пропадет)
+    clearTimeout(typingTimeout);
+   
+    // Если 2 секунды ничего не вводил — отправляем сигнал, что перестал
+    typingTimeout = setTimeout(() => {
+        messageChannel.send({
+            type: 'broadcast',
+            event: 'typing',
+            payload: { userId: currentUser.id, isTyping: false }
+        });
+    }, 2000);
+  });
+
+  async function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text || !currentRoomId) return;
+    messageInput.value = '';
+   
+    // Как только отправили — сразу говорим, что больше не печатаем
+    messageChannel.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id, isTyping: false } });
+    clearTimeout(typingTimeout);
+
     await supabase.from('messages').insert({
       room_id: currentRoomId, text: text, author: currentUserName, uid: currentUser.id, message_type: 'text', is_read: false
     });
   }
 
   document.getElementById('sendBtn').onclick = sendMessage;
-  document.getElementById('messageInput').onkeydown = (e) => { if (e.key === 'Enter') sendMessage(); };
+  messageInput.onkeydown = (e) => { if (e.key === 'Enter') sendMessage(); };
 
-  // --- ОТПРАВКА ФАЙЛОВ ---
   const attachBtn = document.getElementById('attachBtn');
   const fileInput = document.getElementById('fileInput');
   attachBtn.onclick = () => fileInput.click();
@@ -451,21 +484,16 @@
   fileInput.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file || !currentRoomId) return;
-
     messagesEl.innerHTML += '<div class="message other" id="loadingMsg">Загрузка файла...</div>';
     scrollToBottom();
-
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${currentRoomId}/${fileName}`;
-
       const { error: uploadError } = await supabase.storage.from('chat_files').upload(filePath, file);
       if (uploadError) throw uploadError;
-
       const { data: { publicUrl } } = supabase.storage.from('chat_files').getPublicUrl(filePath);
       const isImage = file.type.startsWith('image/');
-     
       await supabase.from('messages').insert({
         room_id: currentRoomId, text: publicUrl, file_name: file.name, author: currentUserName, uid: currentUser.id, message_type: isImage ? 'image' : 'file', is_read: false
       });
@@ -477,7 +505,8 @@
       if (loading) loading.remove();
     }
   };
-      function renderMessage(msg) {
+
+  function renderMessage(msg) {
     const div = document.createElement('div');
     div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
     div.id = `msg-${msg.id}`;
@@ -487,12 +516,10 @@
       const date = new Date(msg.created_at);
       timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     }
-
     let checksHtml = '';
     if (msg.uid === currentUser.id) {
         checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
     }
-
     let contentHtml = '';
     if (msg.message_type === 'image') {
       contentHtml = `<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
@@ -502,7 +529,6 @@
     } else {
       contentHtml = `${msg.text}<span class="time">${timeStr}${checksHtml}</span>`;
     }
-   
     div.innerHTML = contentHtml;
     messagesEl.appendChild(div);
   }
