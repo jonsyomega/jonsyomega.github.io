@@ -96,11 +96,22 @@
     margin-bottom: 10px; cursor: pointer; transition: background 0.2s;
   }
   .contact-item:hover { background: #1f252f; border-color: #ff7a00; }
+ 
+  /* Обертка для аватарки, чтобы позиционировать кружок */
+  .avatar-wrapper { position: relative; margin-right: 15px; }
   .contact-avatar {
     width: 40px; height: 40px; background: #ff7a00; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-weight: bold; color: #000; font-size: 18px; margin-right: 15px;
+    font-weight: bold; color: #000; font-size: 18px;
   }
+  /* Зеленый кружок в сети */
+  .online-dot {
+    position: absolute; bottom: 0; right: 0;
+    width: 12px; height: 12px; background: #22c55e;
+    border: 2px solid #161a22; border-radius: 50%;
+    display: none; /* По умолчанию скрыт */
+  }
+
   .contact-info { flex: 1; display: flex; flex-direction: column; }
   .contact-name { font-size: 16px; font-weight: 500; }
  
@@ -114,10 +125,13 @@
   .chat-header { padding: 16px 20px; background: #161a22; border-bottom: 1px solid #262b36; display: flex; align-items: center; gap: 15px; }
   .back-btn { background: transparent; border: none; color: #ff7a00; font-size: 24px; cursor: pointer; padding-right: 10px; }
  
-  /* Стили для статуса "Печатает..." */
   .chat-title-wrapper { display: flex; flex-direction: column; }
   .chat-title { font-weight: 600; font-size: 16px; }
-  .typing-indicator { font-size: 12px; color: #ff7a00; height: 14px; display: none; }
+ 
+  /* Текст "в сети" или "печатает" */
+  .chat-substatus { font-size: 12px; height: 14px; display: none; }
+  .chat-substatus.online { color: #22c55e; display: block; }
+  .chat-substatus.typing { color: #ff7a00; display: block; }
 
   .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
   .message { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
@@ -172,10 +186,9 @@
   <div class="chat-screen" id="chatScreen">
     <div class="chat-header">
       <button class="back-btn" id="backBtn">←</button>
-      <!-- Обертка для имени и статуса -->
       <div class="chat-title-wrapper">
         <span class="chat-title" id="chatTitle">Имя</span>
-        <span class="typing-indicator" id="typingIndicator">печатает...</span>
+        <span class="chat-substatus" id="chatSubstatus">в сети</span>
       </div>
     </div>
     <div class="messages" id="messages"></div>
@@ -202,7 +215,7 @@
   const contactsList = document.getElementById('contactsList');
   const chatScreen = document.getElementById('chatScreen');
   const chatTitle = document.getElementById('chatTitle');
-  const typingIndicator = document.getElementById('typingIndicator');
+  const chatSubstatus = document.getElementById('chatSubstatus');
   const messagesEl = document.getElementById('messages');
   const userEmail = document.getElementById('userEmail');
   const messageInput = document.getElementById('messageInput');
@@ -210,10 +223,15 @@
   let currentUser = null;
   let currentUserName = '';
   let currentRoomId = null;
+  let currentReceiverId = null; // Храним ID собеседника для статуса
+ 
   let messageChannel = null;
   let globalChannel = null;
+  let presenceChannel = null;
   let isLoadingChats = false;
   let typingTimeout = null;
+ 
+  let onlineUsers = new Set(); // Здесь храним ID всех, кто сейчас онлайн
 
   // --- АВТОРИЗАЦИЯ ---
   document.getElementById('loginBtn').onclick = async () => {
@@ -235,6 +253,7 @@
   document.getElementById('logoutBtn').onclick = async () => {
     if (messageChannel) supabase.removeChannel(messageChannel);
     if (globalChannel) supabase.removeChannel(globalChannel);
+    if (presenceChannel) supabase.removeChannel(presenceChannel); // Отключаем статус онлайн
     await supabase.auth.signOut();
   };
 
@@ -267,10 +286,12 @@
 
       loadRecentChats();
       setupGlobalListener();
+      setupPresence(); // Включаем "Онлайн" статус
       if (messaging) setupNotifications();
     } else {
       currentUser = null;
       currentUserName = '';
+      onlineUsers.clear();
       loginBox.style.display = 'block';
       appContainer.style.display = 'none';
       chatScreen.style.display = 'none';
@@ -278,6 +299,58 @@
       contactsList.innerHTML = '';
     }
   });
+
+  // --- ПРИСУТСТВИЕ (ONLINE СТАТУС) ---
+  function setupPresence() {
+    if (presenceChannel) supabase.removeChannel(presenceChannel);
+   
+    presenceChannel = supabase.channel('online-users', {
+      config: { presence: { key: currentUser.id } }
+    });
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        onlineUsers.clear();
+        for (const id in state) {
+          onlineUsers.add(id);
+        }
+        updateOnlineUI(); // Обновляем интерфейс при изменении
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          // Сообщаем всем, что мы онлайн
+          await presenceChannel.track({ online_at: new Date().toISOString() });
+        }
+      });
+  }
+
+  // Функция обновления зеленых кружочков и текста
+  function updateOnlineUI() {
+    // 1. Обновляем список контактов
+    if (contactsScreen.style.display !== 'none') {
+      const items = contactsList.querySelectorAll('.contact-item');
+      items.forEach(item => {
+        const userId = item.dataset.id;
+        const dot = item.querySelector('.online-dot');
+        if (dot) {
+          dot.style.display = onlineUsers.has(userId) ? 'block' : 'none';
+        }
+      });
+    }
+
+    // 2. Обновляем шапку чата (если мы внутри чата)
+    if (chatScreen.style.display !== 'none' && currentReceiverId) {
+      if (onlineUsers.has(currentReceiverId)) {
+        if (chatSubstatus.classList.contains('typing')) return; // Если печатает, не перебиваем
+        chatSubstatus.textContent = 'в сети';
+        chatSubstatus.className = 'chat-substatus online';
+      } else {
+        if (chatSubstatus.classList.contains('typing')) return;
+        chatSubstatus.className = 'chat-substatus'; // Скрываем
+      }
+    }
+  }
 
   function setupGlobalListener() {
     if (globalChannel) supabase.removeChannel(globalChannel);
@@ -341,11 +414,17 @@
           }
 
           const unreadCount = unreadCounts[room] || 0;
+          const isOnline = onlineUsers.has(otherUserId); // Проверяем статус
          
           const div = document.createElement('div');
           div.className = 'contact-item';
+          div.dataset.id = otherUserId; // Сохраняем ID для быстрого обновления
+         
           div.innerHTML = `
-            <div class="contact-avatar">${initial}</div>
+            <div class="avatar-wrapper">
+              <div class="contact-avatar">${initial}</div>
+              <div class="online-dot" style="display: ${isOnline ? 'block' : 'none'}"></div>
+            </div>
             <div class="contact-info">
               <div class="contact-name">${displayName}</div>
             </div>
@@ -366,7 +445,12 @@
 
   function openChat(receiverId, receiverName) {
     chatTitle.textContent = receiverName;
-    typingIndicator.style.display = 'none'; // Сбрасываем статус при открытии
+    currentReceiverId = receiverId; // Запоминаем ID собеседника
+   
+    // Сбрасываем статус перед проверкой
+    chatSubstatus.className = 'chat-substatus';
+    updateOnlineUI(); // Сразу проверяем, онлайн ли он
+
     const ids = [currentUser.id, receiverId].sort();
     currentRoomId = `${ids[0]}_${ids[1]}`;
 
@@ -382,7 +466,8 @@
     chatScreen.style.display = 'none';
     contactsScreen.style.display = 'block';
     currentRoomId = null;
-    loadRecentChats();
+    currentReceiverId = null;
+    loadRecentChats(); // Перерисовываем список, чтобы обновить кружочки
   };
 
   async function markMessagesAsRead() {
@@ -401,13 +486,12 @@
         scrollToBottom();
       });
 
-    // Канал для сообщений + Broadcast для "Печатает..."
     messageChannel = supabase.channel(`room:${currentRoomId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
         (payload) => {
           renderMessage(payload.new);
           scrollToBottom();
-          typingIndicator.style.display = 'none'; // Если пришло сообщение — значит, перестал печатать
+          hideTypingStatus(); // Пришло сообщение — сбрасываем "печатает"
           if (payload.new.uid !== currentUser.id) markMessagesAsRead();
         }
       )
@@ -423,40 +507,35 @@
            }
         }
       )
-      // СЛУШАЕМ СОБЫТИЕ "ПЕЧАТАЕТ"
       .on('broadcast', { event: 'typing' }, (payload) => {
           if (payload.payload.userId !== currentUser.id) {
               if (payload.payload.isTyping) {
-                  typingIndicator.style.display = 'block';
+                  chatSubstatus.textContent = 'печатает...';
+                  chatSubstatus.className = 'chat-substatus typing';
               } else {
-                  typingIndicator.style.display = 'none';
+                  hideTypingStatus();
               }
           }
       })
       .subscribe();
   }
 
-  // --- ЛОГИКА ОТПРАВКИ "ПЕЧАТАЕТ" ---
+  function hideTypingStatus() {
+      if (currentReceiverId && onlineUsers.has(currentReceiverId)) {
+          chatSubstatus.textContent = 'в сети';
+          chatSubstatus.className = 'chat-substatus online';
+      } else {
+          chatSubstatus.className = 'chat-substatus';
+      }
+  }
+
+  // --- ЛОГИКА "ПЕЧАТАЕТ" ---
   messageInput.addEventListener('input', () => {
     if (!messageChannel) return;
-   
-    // Отправляем сигнал, что печатаем
-    messageChannel.send({
-        type: 'broadcast',
-        event: 'typing',
-        payload: { userId: currentUser.id, isTyping: true }
-    });
-
-    // Сбрасываем таймер (если печатает долго, сигнал не пропадет)
+    messageChannel.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id, isTyping: true } });
     clearTimeout(typingTimeout);
-   
-    // Если 2 секунды ничего не вводил — отправляем сигнал, что перестал
     typingTimeout = setTimeout(() => {
-        messageChannel.send({
-            type: 'broadcast',
-            event: 'typing',
-            payload: { userId: currentUser.id, isTyping: false }
-        });
+        messageChannel.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id, isTyping: false } });
     }, 2000);
   });
 
@@ -464,8 +543,6 @@
     const text = messageInput.value.trim();
     if (!text || !currentRoomId) return;
     messageInput.value = '';
-   
-    // Как только отправили — сразу говорим, что больше не печатаем
     messageChannel.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id, isTyping: false } });
     clearTimeout(typingTimeout);
 
@@ -510,16 +587,14 @@
     const div = document.createElement('div');
     div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
     div.id = `msg-${msg.id}`;
-   
     let timeStr = '';
     if (msg.created_at) {
       const date = new Date(msg.created_at);
       timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     }
     let checksHtml = '';
-    if (msg.uid === currentUser.id) {
-        checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
-    }
+    if (msg.uid === currentUser.id) checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
+   
     let contentHtml = '';
     if (msg.message_type === 'image') {
       contentHtml = `<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
