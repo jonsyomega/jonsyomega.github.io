@@ -101,7 +101,15 @@
     display: flex; align-items: center; justify-content: center;
     font-weight: bold; color: #000; font-size: 18px; margin-right: 15px;
   }
+  .contact-info { flex: 1; display: flex; flex-direction: column; }
   .contact-name { font-size: 16px; font-weight: 500; }
+ 
+  /* Стили для счетчика непрочитанных */
+  .unread-badge {
+    background: #ff3b30; color: #fff; border-radius: 20px;
+    padding: 2px 8px; font-size: 12px; font-weight: bold;
+    min-width: 22px; text-align: center;
+  }
 
   .chat-screen { display: none; flex-direction: column; flex: 1; height: 100%; }
   .chat-header { padding: 16px 20px; background: #161a22; border-bottom: 1px solid #262b36; display: flex; align-items: center; gap: 15px; }
@@ -194,9 +202,10 @@
   let currentUserName = '';
   let currentRoomId = null;
   let messageChannel = null;
+  let globalChannel = null;
   let isLoadingChats = false;
 
-  // --- СНАЧАЛА ВЕШАЕМ СОБЫТИЯ НА КНОПКИ, ЧТОБЫ ОНИ РАБОТАЛИ ВСЕГДА ---
+  // --- АВТОРИЗАЦИЯ ---
   document.getElementById('loginBtn').onclick = async () => {
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
@@ -215,16 +224,15 @@
 
   document.getElementById('logoutBtn').onclick = async () => {
     if (messageChannel) supabase.removeChannel(messageChannel);
+    if (globalChannel) supabase.removeChannel(globalChannel);
     await supabase.auth.signOut();
   };
 
-  // --- ТЕПЕРЬ БЕЗОПАСНО ИНИЦИАЛИЗИРУЕМ FIREBASE ---
+  // --- БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ FIREBASE ---
   let messaging = null;
- 
   try {
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
     const { getMessaging } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js");
-   
     const firebaseConfig = {
       apiKey: "AIzaSyAk2qhmu4GJQozcU74_FNQWhzk4T7P-gPU",
       authDomain: "my-messenger-95eda.firebaseapp.com",
@@ -233,14 +241,11 @@
       messagingSenderId: "327505492353",
       appId: "1:327505492353:web:3306144f22b8ac16eb9080"
     };
-   
     const firebaseApp = initializeApp(firebaseConfig);
     messaging = getMessaging(firebaseApp);
-  } catch (e) {
-    console.log("Firebase не загрузился (уведомления могут не работать):", e);
-  }
+  } catch (e) { console.log("Firebase не загрузился:", e); }
 
-  // --- ДАЛЬШЕ ОСТАЛЬНАЯ ЛОГИКА ---
+  // --- СЛЕЖИМ ЗА ВХОДОМ ---
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (session) {
       currentUser = session.user;
@@ -251,6 +256,7 @@
       userEmail.textContent = currentUserName;
 
       loadRecentChats();
+      setupGlobalListener(); // Слушаем новые сообщения для счетчика
       if (messaging) setupNotifications();
     } else {
       currentUser = null;
@@ -263,27 +269,38 @@
     }
   });
 
+  // --- ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ (чтобы обновлять счетчик) ---
+  function setupGlobalListener() {
+    if (globalChannel) supabase.removeChannel(globalChannel);
+   
+    globalChannel = supabase.channel('global-messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        // Если мы на экране контактов и сообщение не от нас — обновляем список
+        if (contactsScreen.style.display !== 'none' && payload.new.uid !== currentUser.id) {
+          loadRecentChats();
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (payload) => {
+        // Если сообщение прочитали (на другом устройстве) — обновляем счетчик
+        if (contactsScreen.style.display !== 'none') {
+           loadRecentChats();
+        }
+      })
+      .subscribe();
+  }
+
   document.getElementById('searchBtn').onclick = async () => {
     const emailToFind = document.getElementById('searchEmail').value.trim();
     if (!emailToFind) return;
-
     const { data, error } = await supabase.from('profiles').select('*').eq('email', emailToFind).limit(1);
-
-    if (error || !data || data.length === 0) {
-      alert('Пользователь с таким email не найден!');
-      return;
-    }
-
+    if (error || !data || data.length === 0) { alert('Пользователь не найден!'); return; }
     const user = data[0];
-    if (user.id === currentUser.id) {
-      alert('Это ваш собственный email!');
-      return;
-    }
-
+    if (user.id === currentUser.id) { alert('Это ваш email!'); return; }
     document.getElementById('searchEmail').value = '';
     openChat(user.id, user.name || user.email);
   };
 
+  // --- СПИСОК ЧАТОВ С ПОДСЧЕТОМ НЕПРОЧИТАННЫХ ---
   async function loadRecentChats() {
     if (isLoadingChats) return;
     isLoadingChats = true;
@@ -291,8 +308,21 @@
     contactsList.innerHTML = '<p style="color:#8a8f98; font-size:14px;">Загрузка...</p>';
    
     try {
-      const { data: messages, error } = await supabase.from('messages').select('room_id').like('room_id', `%${currentUser.id}%`);
+      // Запрашиваем ВСЕ сообщения для текущего пользователя
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select('room_id, uid, is_read')
+        .like('room_id', `%${currentUser.id}%`);
+
       if (error) throw error;
+
+      // Считаем непрочитанные по каждой комнате
+      const unreadCounts = {};
+      messages.forEach(msg => {
+        if (msg.uid !== currentUser.id && !msg.is_read) {
+          unreadCounts[msg.room_id] = (unreadCounts[msg.room_id] || 0) + 1;
+        }
+      });
 
       const uniqueRooms = [...new Set(messages.map(m => m.room_id))];
       const fragment = document.createDocumentFragment();
@@ -310,17 +340,23 @@
          
           let displayName = 'Собеседник';
           let initial = '?';
-
           const { data: profileData } = await supabase.rpc('get_contact_profile', { other_user_id: otherUserId });
-         
           if (profileData && profileData.length > 0) {
             displayName = profileData[0].name || profileData[0].email;
             initial = displayName.charAt(0).toUpperCase();
           }
 
+          const unreadCount = unreadCounts[room] || 0;
+         
           const div = document.createElement('div');
           div.className = 'contact-item';
-          div.innerHTML = `<div class="contact-avatar">${initial}</div><div class="contact-name">${displayName}</div>`;
+          div.innerHTML = `
+            <div class="contact-avatar">${initial}</div>
+            <div class="contact-info">
+              <div class="contact-name">${displayName}</div>
+            </div>
+            ${unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : ''}
+          `;
           div.onclick = () => openChat(otherUserId, displayName);
           fragment.appendChild(div);
         }
@@ -353,7 +389,7 @@
     chatScreen.style.display = 'none';
     contactsScreen.style.display = 'block';
     currentRoomId = null;
-    loadRecentChats();
+    loadRecentChats(); // Перезагружаем список при выходе из чата
   };
 
   async function markMessagesAsRead() {
@@ -400,23 +436,16 @@
     document.getElementById('messageInput').value = '';
    
     await supabase.from('messages').insert({
-      room_id: currentRoomId,
-      text: text,
-      author: currentUserName,
-      uid: currentUser.id,
-      message_type: 'text',
-      is_read: false
+      room_id: currentRoomId, text: text, author: currentUserName, uid: currentUser.id, message_type: 'text', is_read: false
     });
   }
 
   document.getElementById('sendBtn').onclick = sendMessage;
-  document.getElementById('messageInput').onkeydown = (e) => {
-    if (e.key === 'Enter') sendMessage();
-  };
+  document.getElementById('messageInput').onkeydown = (e) => { if (e.key === 'Enter') sendMessage(); };
 
+  // --- ОТПРАВКА ФАЙЛОВ ---
   const attachBtn = document.getElementById('attachBtn');
   const fileInput = document.getElementById('fileInput');
-
   attachBtn.onclick = () => fileInput.click();
 
   fileInput.onchange = async (e) => {
@@ -438,15 +467,8 @@
       const isImage = file.type.startsWith('image/');
      
       await supabase.from('messages').insert({
-        room_id: currentRoomId,
-        text: publicUrl,
-        file_name: file.name,
-        author: currentUserName,
-        uid: currentUser.id,
-        message_type: isImage ? 'image' : 'file',
-        is_read: false
+        room_id: currentRoomId, text: publicUrl, file_name: file.name, author: currentUserName, uid: currentUser.id, message_type: isImage ? 'image' : 'file', is_read: false
       });
-
     } catch (err) {
       alert('Ошибка загрузки: ' + err.message);
     } finally {
@@ -455,8 +477,7 @@
       if (loading) loading.remove();
     }
   };
-
-  function renderMessage(msg) {
+      function renderMessage(msg) {
     const div = document.createElement('div');
     div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
     div.id = `msg-${msg.id}`;
@@ -469,11 +490,7 @@
 
     let checksHtml = '';
     if (msg.uid === currentUser.id) {
-        if (msg.is_read) {
-            checksHtml = `<span class="checks read">✓✓</span>`;
-        } else {
-            checksHtml = `<span class="checks">✓</span>`;
-        }
+        checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
     }
 
     let contentHtml = '';
@@ -495,7 +512,6 @@
   async function setupNotifications() {
     if (Notification.permission === 'default') await Notification.requestPermission();
     if (Notification.permission !== 'granted') return;
-
     try {
       const { getToken } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js");
       const swRegistration = await navigator.serviceWorker.register('service-worker.js');
@@ -503,7 +519,6 @@
         vapidKey: "BPnA8s44lJWJsYJdM303Uqpyx0jNgkKD0X_ywGKnnXFU1DB9spqNCP2iQRQNi_a4Q8C1UkGl_NzBgBvZb6-kTy8",
         serviceWorkerRegistration: swRegistration
       });
-
       if (currentToken) {
         const { data: existingToken } = await supabase.from('push_tokens').select('id').eq('token', currentToken).limit(1);
         if (!existingToken || existingToken.length === 0) {
