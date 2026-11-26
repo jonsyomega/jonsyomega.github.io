@@ -541,7 +541,8 @@
       )
      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' },
   (payload) => {
-     // Проверяем, есть ли удаленное сообщение на нашем экране, и если да — убираем
+     console.log('Пришло событие удаления:', payload); 
+   // Проверяем, есть ли удаленное сообщение на нашем экране, и если да — убираем
      if (payload.old && payload.old.id) {
          const msgDiv = document.getElementById(`msg-${payload.old.id}`);
          if (msgDiv) msgDiv.remove();
