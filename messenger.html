@@ -648,16 +648,25 @@
   div.innerHTML = contentHtml;
 
   // ДОБАВЛЯЕМ ЛОГИКУ УДАЛЕНИЯ ПРИ КЛИКЕ НА СВОЁ СООБЩЕНИЕ
-  if (msg.uid === currentUser.id) {
-    div.onclick = async () => {
-      if (confirm('Удалить это сообщение?')) {
-        const { error } = await supabase.from('messages').delete().eq('id', msg.id);
-        if (error) alert('Ошибка удаления: ' + error.message);
+ if (msg.uid === currentUser.id) {
+  div.onclick = async () => {
+    if (confirm('Удалить это сообщение?')) {
+      // 1. Мгновенно убираем сообщение с экрана (Оптимистичное обновление)
+      div.remove();
+     
+      // 2. Отправляем команду удаления в базу
+      const { error } = await supabase.from('messages').delete().eq('id', msg.id);
+     
+      if (error) {
+        alert('Ошибка удаления: ' + error.message);
+        // Если произошла ошибка, перезагружаем сообщения, чтобы вернуть его обратно
+        loadMessages();
       }
-    };
-  }
+    }
+  };
+}
 
-  messagesEl.appendChild(div);
+   messagesEl.appendChild(div);
 }
 
   function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
