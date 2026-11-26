@@ -539,6 +539,15 @@
            }
         }
       )
+     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
+  (payload) => {
+     const deletedId = payload.old.id;
+     if (deletedId) {
+         const msgDiv = document.getElementById(`msg-${deletedId}`);
+         if (msgDiv) msgDiv.remove(); // Удаляем сообщение с экрана
+     }
+  }
+)
       .on('broadcast', { event: 'typing' }, (payload) => {
           if (payload.payload.userId !== currentUser.id) {
               if (payload.payload.isTyping) {
