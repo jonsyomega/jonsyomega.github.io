@@ -206,6 +206,47 @@
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52anJocmViaGxjbm54cGp6eWx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ3OTMyNTYsImV4cCI6MjExMDM2OTI1Nn0.BzdRl7PnKIa4HAw9jzPkptiAd9uN2xA_axIwCKdzLqE";
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+  // --- АУДИО-СИСТЕМА (Web Audio API) ---
+  let audioCtx = null;
+ 
+  // Разблокировка звука при первом клике (требование браузеров)
+  function initAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  }
+  document.body.addEventListener('click', initAudio, { once: true });
+  document.body.addEventListener('keydown', initAudio, { once: true });
+
+  // Функция проигрывания звука "блип"
+  function playNotificationSound() {
+    try {
+      if (!audioCtx) initAudio();
+      if (audioCtx.state === 'suspended') return; // Если браузер все еще блокирует
+
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+     
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Нота Ля (A5)
+      osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1); // Понижение до A4
+     
+      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+     
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+     
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.1);
+    } catch (e) {
+      console.log('Ошибка звука:', e);
+    }
+  }
+
   const loginBox = document.getElementById('loginBox');
   const appContainer = document.getElementById('appContainer');
   const contactsScreen = document.getElementById('contactsScreen');
@@ -254,7 +295,7 @@
     await supabase.auth.signOut();
   };
 
-  // --- FIREBASE ---
+  // --- FIREBASE (для фоновых пушей) ---
   let messaging = null;
   try {
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
@@ -342,7 +383,10 @@
     if (globalChannel) supabase.removeChannel(globalChannel);
     globalChannel = supabase.channel('global-messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        if (contactsScreen.style.display !== 'none' && payload.new.uid !== currentUser.id) loadRecentChats();
+        if (contactsScreen.style.display !== 'none' && payload.new.uid !== currentUser.id) {
+            loadRecentChats();
+            playNotificationSound(); // ЗВУК, если мы в списке контактов
+        }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () => {
         if (contactsScreen.style.display !== 'none') loadRecentChats();
@@ -477,7 +521,10 @@
           renderMessage(payload.new);
           scrollToBottom();
           hideTypingStatus();
-          if (payload.new.uid !== currentUser.id) markMessagesAsRead();
+          if (payload.new.uid !== currentUser.id) {
+              markMessagesAsRead();
+              playNotificationSound(); // ЗВУК, если мы в открытом чате
+          }
         }
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
