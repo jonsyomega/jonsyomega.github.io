@@ -615,29 +615,41 @@
   };
 
   function renderMessage(msg) {
-    const div = document.createElement('div');
-    div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
-    div.id = `msg-${msg.id}`;
-    let timeStr = '';
-    if (msg.created_at) {
-      const date = new Date(msg.created_at);
-      timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    }
-    let checksHtml = '';
-    if (msg.uid === currentUser.id) checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
-   
-    let contentHtml = '';
-    if (msg.message_type === 'image') {
-      contentHtml = `<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
-    } else if (msg.message_type === 'file') {
-      let fileName = msg.file_name || 'Файл';
-      contentHtml = `<a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a><span class="time">${timeStr}${checksHtml}</span>`;
-    } else {
-      contentHtml = `${msg.text}<span class="time">${timeStr}${checksHtml}</span>`;
-    }
-    div.innerHTML = contentHtml;
-    messagesEl.appendChild(div);
+  const div = document.createElement('div');
+  div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
+  div.id = `msg-${msg.id}`;
+ 
+  let timeStr = '';
+  if (msg.created_at) {
+    const date = new Date(msg.created_at);
+    timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   }
+  let checksHtml = '';
+  if (msg.uid === currentUser.id) checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
+ 
+  let contentHtml = '';
+  if (msg.message_type === 'image') {
+    contentHtml = `<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
+  } else if (msg.message_type === 'file') {
+    let fileName = msg.file_name || 'Файл';
+    contentHtml = `<a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a><span class="time">${timeStr}${checksHtml}</span>`;
+  } else {
+    contentHtml = `${msg.text}<span class="time">${timeStr}${checksHtml}</span>`;
+  }
+  div.innerHTML = contentHtml;
+
+  // ДОБАВЛЯЕМ ЛОГИКУ УДАЛЕНИЯ ПРИ КЛИКЕ НА СВОЁ СООБЩЕНИЕ
+  if (msg.uid === currentUser.id) {
+    div.onclick = async () => {
+      if (confirm('Удалить это сообщение?')) {
+        const { error } = await supabase.from('messages').delete().eq('id', msg.id);
+        if (error) alert('Ошибка удаления: ' + error.message);
+      }
+    };
+  }
+
+  messagesEl.appendChild(div);
+}
 
   function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
