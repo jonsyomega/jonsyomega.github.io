@@ -649,23 +649,32 @@
   div.innerHTML = contentHtml;
 
   // ДОБАВЛЯЕМ ЛОГИКУ УДАЛЕНИЯ ПРИ КЛИКЕ НА СВОЁ СООБЩЕНИЕ
- if (msg.uid === currentUser.id) {
+if (msg.uid === currentUser.id) {
   div.onclick = async () => {
     if (confirm('Удалить это сообщение?')) {
-      // 1. Мгновенно убираем сообщение с экрана (Оптимистичное обновление)
-      div.remove();
-     
-      // 2. Отправляем команду удаления в базу
+      // Отправляем команду в базу
       const { error } = await supabase.from('messages').delete().eq('id', msg.id);
      
       if (error) {
         alert('Ошибка удаления: ' + error.message);
-        // Если произошла ошибка, перезагружаем сообщения, чтобы вернуть его обратно
-        loadMessages();
+      } else {
+        // Если база ответила успехом — убираем с экрана
+        div.remove();
       }
     }
   };
 }
+
+.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' },
+  (payload) => {
+     console.log('Пришло удаление:', payload);
+     // Проверяем, есть ли удаленное сообщение на экране
+     if (payload.old && payload.old.id) {
+         const msgDiv = document.getElementById(`msg-${payload.old.id}`);
+         if (msgDiv) msgDiv.remove();
+     }
+  }
+)
 
    messagesEl.appendChild(div);
 }
