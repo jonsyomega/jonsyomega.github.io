@@ -391,7 +391,8 @@
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () => {
         if (contactsScreen.style.display !== 'none') loadRecentChats();
       })
-      .subscribe();
+     Стало (добавь функцию для отладки): 
+     .subscribe((status, err) => { console.log('Статус Realtime:', status, err); });
   }
 
   document.getElementById('searchBtn').onclick = async () => {
