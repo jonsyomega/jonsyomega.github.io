@@ -640,23 +640,12 @@ if (msg.uid === currentUser.id) {
   div.onclick = async () => {
     if (confirm('Удалить это сообщение?')) {
      
-      // ХИТРОСТЬ: добавляем .select(), чтобы база вернула нам удаленную строку
-      const { data, error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('id', msg.id)
-        .select();
+      // Вызываем нашу защищенную функцию из базы
+      const { error } = await supabase.rpc('delete_own_message', { msg_id: msg.id });
 
       if (error) {
-        // Если произошла техническая ошибка
-        alert('Ошибка базы: ' + error.message);
-        console.error(error);
-      } else if (data.length === 0) {
-        // Если data пустая, значит RLS заблокировал удаление!
-        alert('Ошибка: У вас нет прав на удаление этого сообщения (или оно уже удалено).');
+        alert('Ошибка удаления: ' + error.message);
       } else {
-        // Если data содержит строку, значит удаление прошло успешно
-        console.log('Успешно удалено:', data);
         div.remove(); // Мгновенно убираем с экрана
       }
     }
