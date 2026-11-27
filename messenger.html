@@ -204,47 +204,37 @@
 
   const SUPABASE_URL = "https://nvjrhrebhlcnnxpjzylx.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52anJocmViaGxjbm54cGp6eWx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ3OTMyNTYsImV4cCI6MjExMDM2OTI1Nn0.BzdRl7PnKIa4HAw9jzPkptiAd9uN2xA_axIwCKdzLqE";
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  // --- АУДИО-СИСТЕМА (Web Audio API) ---
-  let audioCtx = null;
  
-  // Разблокировка звука при первом клике (требование браузеров)
+  // Создаем клиент с принудительным WebSocket
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    realtime: { transport: WebSocket }
+  });
+
+  // --- АУДИО-СИСТЕМА ---
+  let audioCtx = null;
   function initAudio() {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
   }
   document.body.addEventListener('click', initAudio, { once: true });
   document.body.addEventListener('keydown', initAudio, { once: true });
 
-  // Функция проигрывания звука "блип"
   function playNotificationSound() {
     try {
       if (!audioCtx) initAudio();
-      if (audioCtx.state === 'suspended') return; // Если браузер все еще блокирует
-
+      if (audioCtx.state === 'suspended') return;
       const osc = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
-     
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Нота Ля (A5)
-      osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1); // Понижение до A4
-     
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1);
       gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-     
       osc.connect(gainNode);
       gainNode.connect(audioCtx.destination);
-     
       osc.start();
       osc.stop(audioCtx.currentTime + 0.1);
-    } catch (e) {
-      console.log('Ошибка звука:', e);
-    }
+    } catch (e) { console.log('Ошибка звука:', e); }
   }
 
   const loginBox = document.getElementById('loginBox');
@@ -295,7 +285,7 @@
     await supabase.auth.signOut();
   };
 
-  // --- FIREBASE (для фоновых пушей) ---
+  // --- FIREBASE (ПУШИ) ---
   let messaging = null;
   try {
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
@@ -338,7 +328,7 @@
     }
   });
 
-  // --- ПРИСУТСТВИЕ (ONLINE СТАТУС) ---
+  // --- ПРИСУТСТВИЕ (ONLINE) ---
   function setupPresence() {
     if (presenceChannel) supabase.removeChannel(presenceChannel);
     presenceChannel = supabase.channel('online-users', { config: { presence: { key: currentUser.id } } });
@@ -350,9 +340,10 @@
         for (const id in state) { onlineUsers.add(id); }
         updateOnlineUI();
       })
-      .subscribe(async (status) => {
+      .subscribe((status, err) => {
+        console.log('Статус Presence:', status, err);
         if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({ online_at: new Date().toISOString() });
+          presenceChannel.track({ online_at: new Date().toISOString() });
         }
       });
   }
@@ -366,7 +357,6 @@
         if (dot) dot.style.display = onlineUsers.has(userId) ? 'block' : 'none';
       });
     }
-
     if (chatScreen.style.display !== 'none' && currentReceiverId) {
       if (onlineUsers.has(currentReceiverId)) {
         if (chatSubstatus.classList.contains('typing')) return;
@@ -385,14 +375,13 @@
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         if (contactsScreen.style.display !== 'none' && payload.new.uid !== currentUser.id) {
             loadRecentChats();
-            playNotificationSound(); // ЗВУК, если мы в списке контактов
+            playNotificationSound();
         }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () => {
         if (contactsScreen.style.display !== 'none') loadRecentChats();
       })
-     Стало (добавь функцию для отладки): 
-     .subscribe((status, err) => { console.log('Статус Realtime:', status, err); });
+      .subscribe((status, err) => console.log('Статус Global:', status, err));
   }
 
   document.getElementById('searchBtn').onclick = async () => {
@@ -524,7 +513,7 @@
           hideTypingStatus();
           if (payload.new.uid !== currentUser.id) {
               markMessagesAsRead();
-              playNotificationSound(); // ЗВУК, если мы в открытом чате
+              playNotificationSound();
           }
         }
       )
@@ -540,16 +529,14 @@
            }
         }
       )
-    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' },
-  (payload) => {
-     console.log('Пришло удаление:', payload);
-     // Проверяем, есть ли удаленное сообщение на экране
-     if (payload.old && payload.old.id) {
-         const msgDiv = document.getElementById(`msg-${payload.old.id}`);
-         if (msgDiv) msgDiv.remove();
-     }
-  }
-)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' },
+        (payload) => {
+           if (payload.old && payload.old.id) {
+               const msgDiv = document.getElementById(`msg-${payload.old.id}`);
+               if (msgDiv) msgDiv.remove();
+           }
+        }
+      )
       .on('broadcast', { event: 'typing' }, (payload) => {
           if (payload.payload.userId !== currentUser.id) {
               if (payload.payload.isTyping) {
@@ -560,7 +547,7 @@
               }
           }
       })
-      .subscribe();
+      .subscribe((status, err) => console.log(`Статус Room ${currentRoomId}:`, status, err));
   }
 
   function hideTypingStatus() {
@@ -626,48 +613,44 @@
   };
 
   function renderMessage(msg) {
-  const div = document.createElement('div');
-  div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
-  div.id = `msg-${msg.id}`;
- 
-  let timeStr = '';
-  if (msg.created_at) {
-    const date = new Date(msg.created_at);
-    timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  }
-  let checksHtml = '';
-  if (msg.uid === currentUser.id) checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
- 
-  let contentHtml = '';
-  if (msg.message_type === 'image') {
-    contentHtml = `<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
-  } else if (msg.message_type === 'file') {
-    let fileName = msg.file_name || 'Файл';
-    contentHtml = `<a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a><span class="time">${timeStr}${checksHtml}</span>`;
-  } else {
-    contentHtml = `${msg.text}<span class="time">${timeStr}${checksHtml}</span>`;
-  }
-  div.innerHTML = contentHtml;
-
-  // ДОБАВЛЯЕМ ЛОГИКУ УДАЛЕНИЯ ПРИ КЛИКЕ НА СВОЁ СООБЩЕНИЕ
-if (msg.uid === currentUser.id) {
-  div.onclick = async () => {
-    if (confirm('Удалить это сообщение?')) {
-      // Отправляем команду в базу
-      const { error } = await supabase.from('messages').delete().eq('id', msg.id);
-     
-      if (error) {
-        alert('Ошибка удаления: ' + error.message);
-      } else {
-        // Если база ответила успехом — убираем с экрана
-        div.remove();
-      }
+    const div = document.createElement('div');
+    div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
+    div.id = `msg-${msg.id}`;
+    let timeStr = '';
+    if (msg.created_at) {
+      const date = new Date(msg.created_at);
+      timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     }
-  };
-}
+    let checksHtml = '';
+    if (msg.uid === currentUser.id) checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
+   
+    let contentHtml = '';
+    if (msg.message_type === 'image') {
+      contentHtml = `<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
+    } else if (msg.message_type === 'file') {
+      let fileName = msg.file_name || 'Файл';
+      contentHtml = `<a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a><span class="time">${timeStr}${checksHtml}</span>`;
+    } else {
+      contentHtml = `${msg.text}<span class="time">${timeStr}${checksHtml}</span>`;
+    }
+    div.innerHTML = contentHtml;
 
-   messagesEl.appendChild(div);
-}
+    // Удаление по клику (только для своих)
+    if (msg.uid === currentUser.id) {
+      div.onclick = async () => {
+        if (confirm('Удалить это сообщение?')) {
+          const { error } = await supabase.from('messages').delete().eq('id', msg.id);
+          if (error) {
+            alert('Ошибка удаления: ' + error.message);
+          } else {
+            div.remove(); // Мгновенно убираем с экрана
+          }
+        }
+      };
+    }
+
+    messagesEl.appendChild(div);
+  }
 
   function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
