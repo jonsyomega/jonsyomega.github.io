@@ -635,19 +635,33 @@
     }
     div.innerHTML = contentHtml;
 
-    // Удаление по клику (только для своих)
-    if (msg.uid === currentUser.id) {
-      div.onclick = async () => {
-        if (confirm('Удалить это сообщение?')) {
-          const { error } = await supabase.from('messages').delete().eq('id', msg.id);
-          if (error) {
-            alert('Ошибка удаления: ' + error.message);
-          } else {
-            div.remove(); // Мгновенно убираем с экрана
-          }
-        }
-      };
+   // Удаление по клику (только для своих)
+if (msg.uid === currentUser.id) {
+  div.onclick = async () => {
+    if (confirm('Удалить это сообщение?')) {
+     
+      // ХИТРОСТЬ: добавляем .select(), чтобы база вернула нам удаленную строку
+      const { data, error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', msg.id)
+        .select();
+
+      if (error) {
+        // Если произошла техническая ошибка
+        alert('Ошибка базы: ' + error.message);
+        console.error(error);
+      } else if (data.length === 0) {
+        // Если data пустая, значит RLS заблокировал удаление!
+        alert('Ошибка: У вас нет прав на удаление этого сообщения (или оно уже удалено).');
+      } else {
+        // Если data содержит строку, значит удаление прошло успешно
+        console.log('Успешно удалено:', data);
+        div.remove(); // Мгновенно убираем с экрана
+      }
     }
+  };
+}
 
     messagesEl.appendChild(div);
   }
