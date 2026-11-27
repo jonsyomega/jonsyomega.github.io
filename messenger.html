@@ -539,10 +539,10 @@
            }
         }
       )
-     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' },
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' },
   (payload) => {
-     console.log('Пришло событие удаления:', payload); 
-   // Проверяем, есть ли удаленное сообщение на нашем экране, и если да — убираем
+     console.log('Пришло удаление:', payload);
+     // Проверяем, есть ли удаленное сообщение на экране
      if (payload.old && payload.old.id) {
          const msgDiv = document.getElementById(`msg-${payload.old.id}`);
          if (msgDiv) msgDiv.remove();
@@ -664,17 +664,6 @@ if (msg.uid === currentUser.id) {
     }
   };
 }
-
-.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' },
-  (payload) => {
-     console.log('Пришло удаление:', payload);
-     // Проверяем, есть ли удаленное сообщение на экране
-     if (payload.old && payload.old.id) {
-         const msgDiv = document.getElementById(`msg-${payload.old.id}`);
-         if (msgDiv) msgDiv.remove();
-     }
-  }
-)
 
    messagesEl.appendChild(div);
 }
