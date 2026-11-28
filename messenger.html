@@ -534,18 +534,24 @@
           }
         }
       )
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
-        (payload) => {
-           const msgDiv = document.getElementById(`msg-${payload.new.id}`);
-           if (msgDiv) {
-               const checks = msgDiv.querySelector('.checks');
-               if (checks && payload.new.is_read) {
-                   checks.innerHTML = '✓✓';
-                   checks.classList.add('read');
-               }
-           }
-        }
-      )
+     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
+  (payload) => {
+     const msgDiv = document.getElementById(`msg-${payload.new.id}`);
+     if (msgDiv) {
+         // 1. Обновляем галочки прочитанного
+         const checks = msgDiv.querySelector('.checks');
+         if (checks && payload.new.is_read) {
+             checks.innerHTML = '✓✓';
+             checks.classList.add('read');
+         }
+        
+         // 2. Если текст изменился (сообщение отредактировали) — перезагружаем историю
+         if (payload.new.is_edited && payload.new.text !== payload.old.text) {
+             loadMessages();
+         }
+     }
+  }
+)
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' },
         (payload) => {
            if (payload.old && payload.old.id) {
