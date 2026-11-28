@@ -148,6 +148,26 @@
   .message .file-link { display: flex; align-items: center; gap: 8px; text-decoration: none; font-weight: bold; margin-top: 5px; }
   .message.mine .file-link { color: #000; }
   .message.other .file-link { color: #fff; }
+
+  /* Панель ответа над полем ввода */
+.reply-preview {
+  display: none; /* Скрыто по умолчанию */
+  justify-content: space-between;
+  align-items: center;
+  background: #1f252f;
+  padding: 10px 20px;
+  border-top: 1px solid #262b36;
+  border-left: 4px solid #ff7a00;
+}
+.reply-preview-content { font-size: 13px; color: #aaa; display: flex; flex-direction: column; overflow: hidden; }
+.reply-preview-author { font-weight: bold; color: #ff7a00; margin-bottom: 2px;}
+.reply-preview-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 500px; }
+.cancel-reply-btn { background: none; border: none; color: #aaa; font-size: 20px; cursor: pointer; }
+
+/* Цитата внутри пузыря сообщения */
+.quoted-msg { background: rgba(0,0,0,0.1); padding: 6px 10px; border-radius: 6px; margin-bottom: 6px; border-left: 3px solid #ff7a00; font-size: 13px; }
+.message.mine .quoted-msg { border-left-color: #fff; background: rgba(255,255,255,0.2); }
+.quoted-author { font-weight: bold; display: block; margin-bottom: 2px; }
  
   .chat-input { display: flex; gap: 10px; padding: 16px 20px; background: #161a22; border-top: 1px solid #262b36; align-items: center; }
   .chat-input input[type="text"] { flex: 1; padding: 12px 14px; background: #0f1115; border: 1px solid #262b36; border-radius: 10px; color: #fff; font-size: 15px; }
@@ -194,6 +214,14 @@
       </div>
     </div>
     <div class="messages" id="messages"></div>
+    <!-- Панель ответа (скрыта по умолчанию) -->
+<div class="reply-preview" id="replyPreview">
+  <div class="reply-preview-content">
+    <span class="reply-preview-author" id="replyAuthor">Имя</span>
+    <span class="reply-preview-text" id="replyText">Текст сообщения...</span>
+  </div>
+  <button class="cancel-reply-btn" id="cancelReplyBtn">✕</button>
+</div>
     <div class="chat-input">
       <button class="attach-btn" id="attachBtn" title="Прикрепить файл">📎</button>
       <input type="file" id="fileInput" style="display: none;" accept="image/*,application/pdf">
@@ -251,7 +279,8 @@
   const messagesEl = document.getElementById('messages');
   const userEmail = document.getElementById('userEmail');
   const messageInput = document.getElementById('messageInput');
- 
+
+  let currentReplyMessage = null; // Храним сообщение, на которое отвечаем
   let currentUser = null;
   let currentUserName = '';
   let currentRoomId = null;
@@ -492,6 +521,12 @@
     loadRecentChats();
   };
 
+   document.getElementById('cancelReplyBtn').onclick = () => {
+   currentReplyMessage = null;
+   document.getElementById('replyPreview').style.display = 'none';
+  };
+
+
   async function markMessagesAsRead() {
     if (!currentRoomId || !currentUser) return;
     await supabase.from('messages').update({ is_read: true }).eq('room_id', currentRoomId).neq('uid', currentUser.id).eq('is_read', false);
@@ -584,9 +619,28 @@
     messageChannel.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id, isTyping: false } });
     clearTimeout(typingTimeout);
 
-    await supabase.from('messages').insert({
-      room_id: currentRoomId, text: text, author: currentUserName, uid: currentUser.id, message_type: 'text', is_read: false, is_edited: false
-    });
+    const insertData = {
+  room_id: currentRoomId,
+  text: text,
+  author: currentUserName,
+  uid: currentUser.id,
+  message_type: 'text',
+  is_read: false,
+  is_edited: false
+};
+
+// Если мы отвечаем на сообщение — добавляем данные
+if (currentReplyMessage) {
+  insertData.reply_to_id = currentReplyMessage.id;
+  insertData.reply_to_author = currentReplyMessage.author;
+  insertData.reply_to_text = currentReplyMessage.message_type === 'image' ? '📷 Фотография' : (currentReplyMessage.message_type === 'file' ? '📎 Файл' : currentReplyMessage.text);
+}
+
+await supabase.from('messages').insert(insertData);
+
+// Сбрасываем панель ответа после отправки
+currentReplyMessage = null;
+document.getElementById('replyPreview').style.display = 'none';
   }
 
   document.getElementById('sendBtn').onclick = sendMessage;
@@ -632,27 +686,78 @@
       timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     }
    
-    let checksHtml = '';
-    if (msg.uid === currentUser.id) {
-        checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
-    }
-   
     let contentHtml = '';
-    let editedMark = msg.is_edited ? ' <span style="font-size:10px; opacity:0.6;">(изм.)</span>' : '';
-    let editBtn = (msg.uid === currentUser.id && msg.message_type === 'text') ? `<span class="edit-icon" title="Редактировать">✏️</span>` : '';
-   
-    if (msg.message_type === 'image') {
-      contentHtml = `<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
-    } else if (msg.message_type === 'file') {
-      let fileName = msg.file_name || 'Файл';
-      contentHtml = `<a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a><span class="time">${timeStr}${checksHtml}</span>`;
-    } else {
-      contentHtml = `${msg.text}${editedMark}<span class="time">${timeStr}${checksHtml}${editBtn}</span>`;
-    }
-    div.innerHTML = contentHtml;
+
+// Если это ответ на сообщение — рисуем цитату
+let replyHtml = '';
+if (msg.reply_to_id && msg.reply_to_text) {
+  replyHtml = `
+    <div class="quoted-msg">
+      <span class="quoted-author">${msg.reply_to_author}</span>
+      <span>${msg.reply_to_text}</span>
+    </div>
+  `;
+}
+
+let editedMark = msg.is_edited ? ' <span style="font-size:10px; opacity:0.6;">(изм.)</span>' : '';
+let editBtn = (msg.uid === currentUser.id && msg.message_type === 'text') ? `<span class="edit-icon" title="Редактировать">✏️</span>` : '';
+
+if (msg.message_type === 'image') {
+  contentHtml = `${replyHtml}<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
+} else if (msg.message_type === 'file') {
+  let fileName = msg.file_name || 'Файл';
+  contentHtml = `${replyHtml}<a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a><span class="time">${timeStr}${checksHtml}</span>`;
+} else {
+  contentHtml = `${replyHtml}${msg.text}${editedMark}<span class="time">${timeStr}${checksHtml}${editBtn}</span>`;
+}
+ div.innerHTML = contentHtml;
 
     // Логика удаления (по клику на само сообщение)
-    if (msg.uid === currentUser.id) {
+   // --- ЛОГИКА ОТВЕТА (СВАЙП И ДВОЙНОЙ КЛИК) ---
+let touchStartX = 0;
+let touchStartY = 0;
+
+div.addEventListener('touchstart', (e) => {
+  touchStartX = e.changedTouches[0].screenX;
+  touchStartY = e.changedTouches[0].screenY;
+}, { passive: true });
+
+div.addEventListener('touchend', (e) => {
+  const touchEndX = e.changedTouches[0].screenX;
+  const touchEndY = e.changedTouches[0].screenY;
+  const diffX = touchEndX - touchStartX;
+  const diffY = touchEndY - touchStartY;
+
+  // Если свайп горизонтальный (а не скролл) и достаточно длинный (> 60px)
+  if (Math.abs(diffX) > 60 && Math.abs(diffY) < 30) {
+    // Свайп вправо для чужих, влево для своих
+    if ((msg.uid !== currentUser.id && diffX > 0) || (msg.uid === currentUser.id && diffX < 0)) {
+      triggerReply(msg);
+    }
+  }
+}, { passive: true });
+
+// Двойной клик для компьютера
+div.addEventListener('dblclick', (e) => {
+    e.stopPropagation(); // Чтобы не срабатывало удаление
+    triggerReply(msg);
+});
+
+// Функция активации ответа
+function triggerReply(replyMsg) {
+  currentReplyMessage = replyMsg;
+  document.getElementById('replyPreview').style.display = 'flex';
+  document.getElementById('replyAuthor').textContent = replyMsg.author + ':';
+ 
+  let previewText = replyMsg.text;
+  if (replyMsg.message_type === 'image') previewText = '📷 Фотография';
+  if (replyMsg.message_type === 'file') previewText = '📎 Файл';
+ 
+  document.getElementById('replyText').textContent = previewText;
+  messageInput.focus();
+}
+ 
+   if (msg.uid === currentUser.id) {
       div.onclick = async (e) => {
         if (e.target.classList.contains('edit-icon')) return; // Игнорируем клик по карандашу
 
