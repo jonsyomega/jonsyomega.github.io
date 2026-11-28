@@ -136,6 +136,10 @@
   .message.other { align-self: flex-start; background: #262b36; color: #fff; }
  
   .message .time { font-size: 10px; opacity: .6; display: inline-block; margin-left: 8px; float: right; margin-top: 4px; }
+
+  /* СТИЛЬ ДЛЯ ИКОНКИ РЕДАКТИРОВАНИЯ */
+  .edit-icon { cursor: pointer; margin-left: 6px; font-size: 12px; opacity: 0.6; transition: opacity 0.2s; }
+  .edit-icon:hover { opacity: 1; }
   .message .checks { font-size: 12px; margin-left: 4px; color: rgba(0,0,0,0.4); font-weight: bold; }
   .message .checks.read { color: #000; }
  
@@ -378,11 +382,24 @@
             playNotificationSound();
         }
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () => {
-        if (contactsScreen.style.display !== 'none') loadRecentChats();
-      })
-      .subscribe((status, err) => console.log('Статус Global:', status, err));
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoomId}` },
+  (payload) => {
+     const msgDiv = document.getElementById(`msg-${payload.new.id}`);
+     if (msgDiv) {
+         // 1. Обновляем галочки прочитанного
+         const checks = msgDiv.querySelector('.checks');
+         if (checks && payload.new.is_read) {
+             checks.innerHTML = '✓✓';
+             checks.classList.add('read');
+         }
+        
+         // 2. Если текст изменился (сообщение отредактировали) — перезагружаем историю
+         if (payload.new.is_edited && payload.new.text !== payload.old.text) {
+             loadMessages();
+         }
+     }
   }
+)
 
   document.getElementById('searchBtn').onclick = async () => {
     const emailToFind = document.getElementById('searchEmail').value.trim();
@@ -613,47 +630,68 @@
   };
 
   function renderMessage(msg) {
-    const div = document.createElement('div');
-    div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
-    div.id = `msg-${msg.id}`;
-    let timeStr = '';
-    if (msg.created_at) {
-      const date = new Date(msg.created_at);
-      timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    }
-    let checksHtml = '';
-    if (msg.uid === currentUser.id) checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
-   
-    let contentHtml = '';
-    if (msg.message_type === 'image') {
-      contentHtml = `<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
-    } else if (msg.message_type === 'file') {
-      let fileName = msg.file_name || 'Файл';
-      contentHtml = `<a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a><span class="time">${timeStr}${checksHtml}</span>`;
-    } else {
-      contentHtml = `${msg.text}<span class="time">${timeStr}${checksHtml}</span>`;
-    }
-    div.innerHTML = contentHtml;
-
-   // Удаление по клику (только для своих)
-if (msg.uid === currentUser.id) {
-  div.onclick = async () => {
-    if (confirm('Удалить это сообщение?')) {
-     
-      // Вызываем нашу защищенную функцию из базы
-      const { error } = await supabase.rpc('delete_own_message', { msg_id: msg.id });
-
-      if (error) {
-        alert('Ошибка удаления: ' + error.message);
-      } else {
-        div.remove(); // Мгновенно убираем с экрана
-      }
-    }
-  };
-}
-
-    messagesEl.appendChild(div);
+  const div = document.createElement('div');
+  div.className = 'message ' + (msg.uid === currentUser.id ? 'mine' : 'other');
+  div.id = `msg-${msg.id}`;
+ 
+  let timeStr = '';
+  if (msg.created_at) {
+    const date = new Date(msg.created_at);
+    timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   }
+ 
+  let checksHtml = '';
+  if (msg.uid === currentUser.id) {
+      checksHtml = msg.is_read ? `<span class="checks read">✓✓</span>` : `<span class="checks">✓</span>`;
+  }
+ 
+  let contentHtml = '';
+  let editedMark = msg.is_edited ? ' <span style="font-size:10px; opacity:0.6;">(изм.)</span>' : '';
+  let editBtn = (msg.uid === currentUser.id && msg.message_type === 'text') ? `<span class="edit-icon" title="Редактировать">✏️</span>` : '';
+ 
+  if (msg.message_type === 'image') {
+    contentHtml = `<img src="${msg.text}" alt="Картинка" onload="scrollToBottom()"><span class="time">${timeStr}${checksHtml}</span>`;
+  } else if (msg.message_type === 'file') {
+    let fileName = msg.file_name || 'Файл';
+    contentHtml = `<a href="${msg.text}" target="_blank" class="file-link">📎 ${fileName}</a><span class="time">${timeStr}${checksHtml}</span>`;
+  } else {
+    contentHtml = `${msg.text}${editedMark}<span class="time">${timeStr}${checksHtml}${editBtn}</span>`;
+  }
+  div.innerHTML = contentHtml;
+
+  // Логика удаления (по клику на само сообщение)
+  if (msg.uid === currentUser.id) {
+    div.onclick = async (e) => {
+      // Если кликнули на иконку редактирования, не вызываем удаление
+      if (e.target.classList.contains('edit-icon')) return;
+
+      if (confirm('Удалить это сообщение?')) {
+        const { error } = await supabase.rpc('delete_own_message', { msg_id: msg.id });
+        if (error) alert('Ошибка удаления: ' + error.message);
+        else div.remove();
+      }
+    };
+  }
+
+  // Логика редактирования (по клику на иконку ✏️)
+  const editEl = div.querySelector('.edit-icon');
+  if (editEl) {
+    editEl.onclick = async (e) => {
+      e.stopPropagation(); // Предотвращаем всплытие клика до удаления
+      const newText = prompt("Редактировать сообщение:", msg.text);
+     
+      if (newText !== null && newText.trim() !== '' && newText !== msg.text) {
+        const { error } = await supabase.rpc('edit_own_message', {
+          msg_id: msg.id,
+          new_text: newText.trim()
+        });
+        if (error) alert('Ошибка редактирования: ' + error.message);
+      }
+    };
+  }
+
+  messagesEl.appendChild(div);
+}
 
   function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
